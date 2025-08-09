@@ -14,6 +14,8 @@ export const AuthProvider = ({ children }) => {
 
   const [userData, setUserData] = useState(authContext);
 
+  const router = useNavigate();
+
   const handleRegister = async (name, username, password) => {
     try {
       let request = await client.post("/register", {
@@ -30,7 +32,6 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (e) {
       throw e;
-      // console.log(e.response.data.message);
     }
   };
 
@@ -41,20 +42,47 @@ export const AuthProvider = ({ children }) => {
         password: password,
       });
       if (request.status === httpstatus.OK) {
-        return localStorage.setItem("token", request.data.token);
+        localStorage.setItem("token", request.data.token);
+        localStorage.setItem("isLoggedIn", "true");
+        router("/");
       }
     } catch (err) {
       throw err;
     }
   };
 
-  const router = useNavigate();
+  const getHistoryOfUser = async () => {
+    try {
+      let request = await client.get("/get_all_activity", {
+        params: {
+          token: localStorage.getItem("token"),
+        },
+      });
+      return request.data;
+    } catch {
+      throw new Error("Error fetching user history");
+    }
+  };
+
+  const addToUserHistory = async (meetingCode) => {
+    try {
+      let request = await client.post("/add_to_activity", {
+        token: localStorage.getItem("token"),
+        meeting_code: meetingCode,
+      });
+      return request;
+    } catch {
+      throw new Error("Error adding to user history");
+    }
+  };
 
   const data = {
     userData,
     setUserData,
+    getHistoryOfUser,
     handleRegister,
     handleLogin,
+    addToUserHistory,
   };
 
   return <AuthContext.Provider value={data}>{children}</AuthContext.Provider>;
