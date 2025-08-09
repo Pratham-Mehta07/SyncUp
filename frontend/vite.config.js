@@ -11,7 +11,7 @@ export default defineConfig({
       output: {
         manualChunks: {
           react: ["react", "react-dom"], // core React libs
-          ui: ["lucide-react", "@shadcn/ui"], // UI-related libs
+          ui: ["lucide-react"], // UI-related libs
           rtc: ["simple-peer", "socket.io-client"], // WebRTC / sockets
         },
       },
