@@ -63,7 +63,10 @@
 .meetVideoContainer {
   position: relative;
   height: 100vh;
-  background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+  background-color: #121212;
+
+  backdrop-filter: blur(8px);
+
   overflow: hidden;
 }
 
@@ -344,7 +347,8 @@
 }
 
 .chatContainer h1 {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(to bottom right, #1e1e2f, #2a2e3d);
+
   color: white;
   margin: 0;
   padding: 24px;
@@ -460,16 +464,19 @@
 .chattingArea .MuiOutlinedInput-root {
   border-radius: 25px;
   background: rgba(248, 249, 250, 0.8);
+  color: white;
   transition: all 0.3s ease;
 }
 
 .chattingArea .MuiOutlinedInput-root:hover {
   background: rgba(248, 249, 250, 1);
+
   transform: translateY(-1px);
 }
 
 .chattingArea .MuiOutlinedInput-root.Mui-focused {
   background: white;
+
   box-shadow: 0 4px 20px rgba(102, 126, 234, 0.15);
 }
 
