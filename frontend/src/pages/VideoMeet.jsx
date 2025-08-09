@@ -14,7 +14,7 @@ import ChatIcon from "@mui/icons-material/Chat";
 import SendIcon from "@mui/icons-material/Send";
 import PersonIcon from "@mui/icons-material/Person";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
-import server from "../utils/environment.js";
+import server from "../environment.js";
 import CloseIcon from "@mui/icons-material/Close";
 
 const server_url = server;
