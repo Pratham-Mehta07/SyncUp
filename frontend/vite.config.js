@@ -6,6 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
+    outDir: "build",
     chunkSizeWarningLimit: 1600, // increase limit to 1.6 MB
     rollupOptions: {
       output: {
