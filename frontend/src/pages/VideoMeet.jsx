@@ -687,7 +687,13 @@ export default function VideoMeetComponent() {
             />
 
             <button
-              onClick={connect}
+              onClick={() => {
+                if (username.trim() === "") {
+                  alert("Please enter a username");
+                } else {
+                  connect();
+                }
+              }}
               className="w-full py-3 rounded-xl bg-gradient-to-r from-[#22c55e] to-[#15803d] text-white font-semibold shadow-lg hover:scale-105 hover:shadow-xl transition"
             >
               Start Meeting
