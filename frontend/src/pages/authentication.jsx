@@ -41,8 +41,9 @@ export default function authentication() {
         setPassword("");
       }
     } catch (err) {
-      let message = err.response.data.message;
-      seterror(message);
+      // let message = err.response.data.message;
+      // seterror(message);
+      console.log(err);
     }
   };
 

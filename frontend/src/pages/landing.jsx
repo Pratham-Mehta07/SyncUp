@@ -185,6 +185,30 @@ const SyncUpLanding = () => {
     },
   ];
 
+  function generateFormattedMeetingCode() {
+    const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let result = "";
+
+    for (let i = 0; i < 9; i++) {
+      if (i === 3 || i === 6) {
+        result += "-";
+      }
+      result += characters.charAt(
+        Math.floor(Math.random() * characters.length)
+      );
+    }
+
+    return result;
+  }
+
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    // Check login state from localStorage (or API)
+    const loggedIn = localStorage.getItem("isLoggedIn") === "true";
+    setIsLoggedIn(loggedIn);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white overflow-hidden relative">
       <BackgroundEffects />
@@ -193,33 +217,50 @@ const SyncUpLanding = () => {
       <nav className="relative z-50 backdrop-blur-xl bg-black/20 border-b border-green-500/10">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
+            {/* Left side (Logo) */}
             <FloatingCard>
-              <div className="flex items-center space-x-2">
-                <div
-                  className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 
-                                flex items-center justify-center"
-                >
-                  <Video className="w-6 h-6 text-white" />
+              <div className="flex items-center space-x-4">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center mt-2">
+                  <img
+                    src="./src/assets/Logo.png"
+                    alt="SyncUp Logo"
+                    className="w-full h-full rounded-xl object-cover"
+                  />
                 </div>
-                <h1
-                  className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-500 
-                               bg-clip-text text-transparent"
-                >
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">
                   SyncUp
                 </h1>
               </div>
             </FloatingCard>
 
-            <FloatingCard delay={200}>
-              <GradientButton
-                variant="outline"
-                className="text-sm"
-                onClick={() => (window.location.href = "/auth")}
-              >
-                <Lock className="w-4 h-4" />
-                LOGIN
-              </GradientButton>
-            </FloatingCard>
+            {/* Right side (Depends on login) */}
+            {isLoggedIn ? (
+              <FloatingCard delay={200}>
+                <GradientButton
+                  variant="outline"
+                  className="text-sm"
+                  onClick={() => {
+                    window.location.href = "/";
+                    setIsLoggedIn(false);
+                    localStorage.removeItem("isLoggedIn");
+                  }}
+                >
+                  <Lock className="w-4 h-4" />
+                  LOGOUT
+                </GradientButton>
+              </FloatingCard>
+            ) : (
+              <FloatingCard delay={200}>
+                <GradientButton
+                  variant="outline"
+                  className="text-sm"
+                  onClick={() => (window.location.href = "/auth")}
+                >
+                  <Lock className="w-4 h-4" />
+                  LOGIN
+                </GradientButton>
+              </FloatingCard>
+            )}
           </div>
         </div>
       </nav>
@@ -263,7 +304,12 @@ const SyncUpLanding = () => {
 
             <FloatingCard delay={1000}>
               <div className="flex flex-col sm:flex-row gap-4">
-                <GradientButton className="w-full sm:w-auto">
+                <GradientButton
+                  className="w-full sm:w-auto"
+                  onClick={() =>
+                    (window.location.href = `/${generateFormattedMeetingCode()}`)
+                  }
+                >
                   <Play className="w-5 h-5" />
                   START FREE MEETING
                   <ArrowRight className="w-5 h-5" />
@@ -272,7 +318,7 @@ const SyncUpLanding = () => {
                 <GradientButton
                   variant="secondary"
                   className="w-full sm:w-auto"
-                  onClick={() => (window.location.href = "/join")}
+                  onClick={() => (window.location.href = "/home")}
                 >
                   <Globe className="w-5 h-5" />
                   JOIN MEETING

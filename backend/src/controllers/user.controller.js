@@ -1,6 +1,7 @@
 import { User } from "../models/user.model.js";
+import { meeting } from "../models/meeting.model.js";
 import httpStatus from "http-status";
-import bcrypt, { hash } from "bcrypt";
+import bcrypt from "bcrypt";
 import crypto from "crypto";
 import mongoose from "mongoose";
 
@@ -55,4 +56,41 @@ const register = async (req, res) => {
   }
 };
 
-export { login, register };
+const getUserHistory = async (req, res) => {
+  const { token } = req.query;
+  try {
+    const user = await User.findOne({ token });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Get ALL meetings for that user
+    const meetings = await Meeting.find({ user_id: user.username });
+    res.json(meetings);
+  } catch (error) {
+    res
+      .status(httpStatus.INTERNAL_SERVER_ERROR)
+      .json({ message: "Error fetching user history" });
+  }
+};
+
+const addToHistory = async (req, res) => {
+  const { token, meeting_code } = req.body;
+  try {
+    const user = await User.findOne({ token: token });
+    const newMeeting = new meeting({
+      user_id: user.username,
+      meetingcode: meeting_code,
+    });
+
+    await newMeeting.save();
+    res
+      .status(httpStatus.CREATED)
+      .json({ message: "Meeting added to history" });
+  } catch {
+    res
+      .status(httpStatus.INTERNAL_SERVER_ERROR)
+      .json({ message: "Error adding meeting to history" });
+  }
+};
+export { login, register, getUserHistory, addToHistory };

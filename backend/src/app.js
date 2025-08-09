@@ -30,4 +30,8 @@ const start = async () => {
   });
 };
 
+app.listen(8000, "0.0.0.0", () => {
+  console.log("Server running...");
+});
+
 start();

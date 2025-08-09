@@ -1,4 +1,5 @@
 import { Schema } from "mongoose";
+import mongoose from "mongoose";
 
 const meetingSchema = new Schema({
   user_id: { type: "String" },
@@ -6,6 +7,6 @@ const meetingSchema = new Schema({
   date: { type: Date, default: Date.now, required: true },
 });
 
-const meeting = mongoose.model("Meeting", meetingSchema);
+const meeting = mongoose.model("meeting", meetingSchema);
 
 export { meeting };
