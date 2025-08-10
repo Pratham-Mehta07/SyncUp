@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-
 import "../index.css";
 import {
   Video,
@@ -12,6 +11,7 @@ import {
   Sparkles,
   Globe,
   Lock,
+  History,
 } from "lucide-react";
 
 // Shimmer Loading Component (Inspired by Next.js)
@@ -248,10 +248,11 @@ const SyncUpLanding = () => {
                 </FloatingCard>
                 <FloatingCard delay={400}>
                   <GradientButton
-                    variant="secondary"
+                    variant="outline"
                     onClick={() => {
                       localStorage.removeItem("token");
-                      navigate("/auth");
+                      navigate("/");
+                      setIsLoggedIn(false);
                     }}
                   >
                     <Lock className="w-4 h-4" /> LOGOUT
