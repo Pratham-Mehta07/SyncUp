@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 import "../index.css";
 import {
@@ -158,6 +159,7 @@ const BackgroundEffects = () => (
 );
 
 const SyncUpLanding = () => {
+  const navigate = useNavigate();
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
@@ -254,7 +256,7 @@ const SyncUpLanding = () => {
                 <GradientButton
                   variant="outline"
                   className="text-sm"
-                  onClick={() => (window.location.href = "/auth")}
+                  onClick={() => navigate("/auth")}
                 >
                   <Lock className="w-4 h-4" />
                   LOGIN
@@ -270,7 +272,6 @@ const SyncUpLanding = () => {
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           {/* Left Content */}
           <div className="space-y-8">
-      
             <FloatingCard delay={600}>
               <div className="space-y-4">
                 <h2 className="text-6xl lg:text-7xl font-bold leading-tight">
