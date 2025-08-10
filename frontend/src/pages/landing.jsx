@@ -237,20 +237,27 @@ const SyncUpLanding = () => {
 
             {/* Right side (Depends on login) */}
             {isLoggedIn ? (
-              <FloatingCard delay={200}>
-                <GradientButton
-                  variant="outline"
-                  className="text-sm"
-                  onClick={() => {
-                    window.location.href = "/";
-                    setIsLoggedIn(false);
-                    localStorage.removeItem("isLoggedIn");
-                  }}
-                >
-                  <Lock className="w-4 h-4" />
-                  LOGOUT
-                </GradientButton>
-              </FloatingCard>
+              <div className="flex items-center gap-4">
+                <FloatingCard delay={200}>
+                  <GradientButton
+                    variant="outline"
+                    onClick={() => navigate("/history")}
+                  >
+                    <History className="w-4 h-4" /> HISTORY
+                  </GradientButton>
+                </FloatingCard>
+                <FloatingCard delay={400}>
+                  <GradientButton
+                    variant="secondary"
+                    onClick={() => {
+                      localStorage.removeItem("token");
+                      navigate("/auth");
+                    }}
+                  >
+                    <Lock className="w-4 h-4" /> LOGOUT
+                  </GradientButton>
+                </FloatingCard>
+              </div>
             ) : (
               <FloatingCard delay={200}>
                 <GradientButton
@@ -298,9 +305,7 @@ const SyncUpLanding = () => {
               <div className="flex flex-col sm:flex-row gap-4">
                 <GradientButton
                   className="w-full sm:w-auto"
-                  onClick={() =>
-                    (window.location.href = `/${generateFormattedMeetingCode()}`)
-                  }
+                  onClick={() => navigate(`/${generateFormattedMeetingCode()}`)}
                 >
                   <Play className="w-5 h-5" />
                   START FREE MEETING
@@ -310,7 +315,7 @@ const SyncUpLanding = () => {
                 <GradientButton
                   variant="secondary"
                   className="w-full sm:w-auto"
-                  onClick={() => (window.location.href = "/home")}
+                  onClick={() => navigate("/home")}
                 >
                   <Globe className="w-5 h-5" />
                   JOIN MEETING

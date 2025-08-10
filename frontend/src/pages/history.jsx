@@ -36,6 +36,7 @@ const history = () => {
           <p>No meeting history found.</p>
         )}
       </div>
+      <button onClick={() => routeTo("/home")}>Go to Home</button>
     </div>
   );
 };
