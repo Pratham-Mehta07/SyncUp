@@ -139,13 +139,17 @@ export default function VideoMeetComponent() {
 
   let getUserMediaSuccess = (stream) => {
     try {
-      window.localStream.getTracks().forEach((track) => track.stop());
+      if (window.localStream) {
+        window.localStream.getTracks().forEach((track) => track.stop());
+      }
     } catch (e) {
-      console.log(e);
+      console.log("Error stopping existing tracks:", e);
     }
 
     window.localStream = stream;
-    localVideoref.current.srcObject = stream;
+    if (localVideoref.current) {
+      localVideoref.current.srcObject = stream;
+    }
 
     for (let id in connections) {
       if (id === socketIdRef.current) continue;
@@ -156,10 +160,21 @@ export default function VideoMeetComponent() {
         const hasAudio = senders.some((s) => s.track && s.track.kind === "audio");
         const vt = window.localStream.getVideoTracks()[0];
         const at = window.localStream.getAudioTracks()[0];
-        if (!hasVideo && vt) pc.addTrack(vt, window.localStream);
-        if (!hasAudio && at) pc.addTrack(at, window.localStream);
-      } catch (e) {}
+        
+        // Add tracks if they don't exist
+        if (!hasVideo && vt) {
+          pc.addTrack(vt, window.localStream);
+          console.log("Added video track to connection:", id);
+        }
+        if (!hasAudio && at) {
+          pc.addTrack(at, window.localStream);
+          console.log("Added audio track to connection:", id);
+        }
+      } catch (e) {
+        console.log("Error adding tracks to connection:", id, e);
+      }
 
+      // Always renegotiate to ensure proper track updates
       pc.createOffer().then((description) => {
         pc
           .setLocalDescription(description)
@@ -169,9 +184,10 @@ export default function VideoMeetComponent() {
               id,
               JSON.stringify({ sdp: pc.localDescription })
             );
+            console.log("Renegotiated connection:", id);
           })
-          .catch((e) => console.log(e));
-      });
+          .catch((e) => console.log("Error renegotiating connection:", id, e));
+      }).catch((e) => console.log("Error creating offer for connection:", id, e));
     }
 
     stream.getTracks().forEach(
@@ -292,36 +308,63 @@ export default function VideoMeetComponent() {
 
     if (fromId !== socketIdRef.current) {
       if (signal.sdp) {
-        connections[fromId]
-          .setRemoteDescription(new RTCSessionDescription(signal.sdp))
-          .then(() => {
-            if (signal.sdp.type === "offer") {
-              connections[fromId]
-                .createAnswer()
-                .then((description) => {
-                  connections[fromId]
-                    .setLocalDescription(description)
-                    .then(() => {
-                      socketRef.current.emit(
-                        "signal",
-                        fromId,
-                        JSON.stringify({
-                          sdp: connections[fromId].localDescription,
-                        })
-                      );
-                    })
-                    .catch((e) => console.log(e));
-                })
-                .catch((e) => console.log(e));
-            }
-          })
-          .catch((e) => console.log(e));
+        const pc = connections[fromId];
+        if (!pc) {
+          console.log("No peer connection found for:", fromId);
+          return;
+        }
+
+        // Check current signaling state before setting remote description
+        const currentState = pc.signalingState;
+        console.log(`Current signaling state for ${fromId}:`, currentState);
+        
+        // Only set remote description if we're in a valid state
+        if (currentState === "stable" || currentState === "have-local-offer") {
+          console.log(`Setting remote description for ${fromId}, type:`, signal.sdp.type);
+          
+          pc.setRemoteDescription(new RTCSessionDescription(signal.sdp))
+            .then(() => {
+              console.log(`Remote description set successfully for ${fromId}`);
+              
+              if (signal.sdp.type === "offer") {
+                console.log(`Creating answer for ${fromId}`);
+                pc.createAnswer()
+                  .then((description) => {
+                    pc.setLocalDescription(description)
+                      .then(() => {
+                        console.log(`Local description set for ${fromId}, sending answer`);
+                        socketRef.current.emit(
+                          "signal",
+                          fromId,
+                          JSON.stringify({
+                            sdp: pc.localDescription,
+                          })
+                        );
+                      })
+                      .catch((e) => console.log(`Error setting local description for ${fromId}:`, e));
+                  })
+                  .catch((e) => console.log(`Error creating answer for ${fromId}:`, e));
+              }
+            })
+            .catch((e) => {
+              console.log(`Error setting remote description for ${fromId}:`, e);
+              // If we get an InvalidStateError, try to reset the connection state
+              if (e.name === "InvalidStateError") {
+                console.log(`InvalidStateError for ${fromId}, attempting to reset connection`);
+                // Don't try to set remote description again, just log the error
+              }
+            });
+        } else {
+          console.log(`Skipping remote description for ${fromId}, invalid state:`, currentState);
+        }
       }
 
       if (signal.ice) {
-        connections[fromId]
-          .addIceCandidate(new RTCIceCandidate(signal.ice))
-          .catch((e) => console.log(e));
+        const pc = connections[fromId];
+        if (pc) {
+          pc.addIceCandidate(new RTCIceCandidate(signal.ice))
+            .catch((e) => console.log(`Error adding ICE candidate for ${fromId}:`, e));
+        }
       }
     }
   };
@@ -588,6 +631,94 @@ export default function VideoMeetComponent() {
     return track;
   };
 
+  // Helper function to ensure proper audio track replacement
+  const replaceAudioTrackForConnection = async (pc, newTrack, connectionId) => {
+    try {
+      const senders = pc.getSenders ? pc.getSenders() : [];
+      const audioSender = senders.find(
+        (s) => s.track && s.track.kind === "audio"
+      );
+      
+      if (audioSender && audioSender.replaceTrack) {
+        console.log(`Replacing audio track for connection: ${connectionId}`);
+        console.log(`Current signaling state:`, pc.signalingState);
+        
+        // Ensure the new track is enabled
+        newTrack.enabled = true;
+        
+        await audioSender.replaceTrack(newTrack);
+        console.log(`Audio track replaced successfully for: ${connectionId}`);
+        
+        // Check if we're in a stable state before creating offer
+        if (pc.signalingState === "stable") {
+          console.log(`Creating offer for audio track replacement: ${connectionId}`);
+          const description = await pc.createOffer();
+          await pc.setLocalDescription(description);
+          socketRef.current.emit(
+            "signal",
+            connectionId,
+            JSON.stringify({ sdp: pc.localDescription })
+          );
+          console.log(`Successfully replaced and renegotiated audio for: ${connectionId}`);
+        } else {
+          console.log(`Skipping offer creation for audio ${connectionId}, signaling state:`, pc.signalingState);
+        }
+        return true;
+      } else {
+        console.log(`No audio sender found for connection: ${connectionId}, using fallback`);
+        return false;
+      }
+    } catch (e) {
+      console.log(`Error replacing audio track for connection: ${connectionId}`, e);
+      return false;
+    }
+  };
+
+  // Helper function to ensure proper video track replacement
+  const replaceVideoTrackForConnection = async (pc, newTrack, connectionId) => {
+    try {
+      const senders = pc.getSenders ? pc.getSenders() : [];
+      const videoSender = senders.find(
+        (s) => s.track && s.track.kind === "video"
+      );
+      
+      if (videoSender && videoSender.replaceTrack) {
+        console.log(`Replacing video track for connection: ${connectionId}`);
+        console.log(`Old track:`, videoSender.track);
+        console.log(`New track:`, newTrack);
+        console.log(`Current signaling state:`, pc.signalingState);
+        
+        // Ensure the new track is enabled
+        newTrack.enabled = true;
+        
+        await videoSender.replaceTrack(newTrack);
+        console.log(`Track replaced successfully for: ${connectionId}`);
+        
+        // Check if we're in a stable state before creating offer
+        if (pc.signalingState === "stable") {
+          console.log(`Creating offer for track replacement: ${connectionId}`);
+          const description = await pc.createOffer();
+          await pc.setLocalDescription(description);
+          socketRef.current.emit(
+            "signal",
+            connectionId,
+            JSON.stringify({ sdp: pc.localDescription })
+          );
+          console.log(`Successfully replaced and renegotiated video for: ${connectionId}`);
+        } else {
+          console.log(`Skipping offer creation for ${connectionId}, signaling state:`, pc.signalingState);
+        }
+        return true;
+      } else {
+        console.log(`No video sender found for connection: ${connectionId}, using fallback`);
+        return false;
+      }
+    } catch (e) {
+      console.log(`Error replacing video track for connection: ${connectionId}`, e);
+      return false;
+    }
+  };
+
   let handleVideo = async () => {
     const turningOff = video === true;
     setVideo(!video);
@@ -603,12 +734,13 @@ export default function VideoMeetComponent() {
           if (currentStream) {
             currentStream.getVideoTracks().forEach((t) => t.stop());
           }
-        } catch {}
+        } catch (e) {
+          console.log("Error stopping video tracks:", e);
+        }
 
-        const newLocalStream = new MediaStream([
-          blackTrack,
-          ...(window.localStream?.getAudioTracks() || []),
-        ]);
+        const audioTracks = window.localStream ? window.localStream.getAudioTracks() : [];
+        const newLocalStream = new MediaStream([blackTrack, ...audioTracks]);
+        console.log("Preserving audio tracks when turning video off:", audioTracks.length);
         window.localStream = newLocalStream;
         if (localVideoref.current) {
           localVideoref.current.srcObject = newLocalStream;
@@ -618,21 +750,24 @@ export default function VideoMeetComponent() {
         for (let id in connections) {
           const pc = connections[id];
           if (!pc) continue;
-          const senders = pc.getSenders ? pc.getSenders() : [];
-          const videoSender = senders.find(
-            (s) => s.track && s.track.kind === "video"
-          );
-          if (videoSender && videoSender.replaceTrack) {
-            await videoSender.replaceTrack(blackTrack);
-          } else {
+          
+          // Try to replace the video track with black track
+          const trackReplaced = await replaceVideoTrackForConnection(pc, blackTrack, id);
+          
+          if (!trackReplaced) {
+            console.log("Track replacement failed for video off, using fallback for:", id);
             try {
               if (pc.getLocalStreams) {
                 pc.getLocalStreams().forEach((s) => pc.removeStream(s));
               }
-            } catch {}
+            } catch (e) {
+              console.log("Error removing streams:", e);
+            }
             try {
               pc.addStream(window.localStream);
-            } catch {}
+            } catch (e) {
+              console.log("Error adding stream:", e);
+            }
             try {
               const description = await pc.createOffer();
               await pc.setLocalDescription(description);
@@ -642,65 +777,222 @@ export default function VideoMeetComponent() {
                 JSON.stringify({ sdp: pc.localDescription })
               );
             } catch (e) {
-              console.log(e);
+              console.log("Error renegotiating video off:", e);
             }
           }
         }
       } else {
         // Turning on: reacquire camera video track and replace
-        const media = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        const cameraTrack = media.getVideoTracks()[0];
+        console.log("Turning video back on...");
+        
+        try {
+          // First, stop any existing video tracks to free up the camera
+          if (window.localStream) {
+            window.localStream.getVideoTracks().forEach((track) => {
+              track.stop();
+              console.log("Stopped existing video track:", track.id);
+            });
+          }
+          
+          // Get new camera stream
+          const media = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              frameRate: { ideal: 30 }
+            }, 
+            audio: false 
+          });
+          
+          const cameraTrack = media.getVideoTracks()[0];
+          console.log("Got new camera track:", cameraTrack);
+          console.log("Camera track enabled:", cameraTrack.enabled);
+          console.log("Camera track readyState:", cameraTrack.readyState);
 
-        // Update local stream: keep existing audio track if present
-        const newLocalStream = new MediaStream([
-          cameraTrack,
-          ...(window.localStream?.getAudioTracks() || []),
-        ]);
+          // Create new local stream with the camera track and existing audio
+          const audioTracks = window.localStream ? window.localStream.getAudioTracks() : [];
+          const newLocalStream = new MediaStream([cameraTrack, ...audioTracks]);
+          console.log("Preserving audio tracks:", audioTracks.length);
+          
+          // Update global stream reference
+          window.localStream = newLocalStream;
+          
+          // Update local video element immediately
+          if (localVideoref.current) {
+            localVideoref.current.srcObject = newLocalStream;
+            console.log("Updated local video element with new stream");
+            
+            // Force video element to reload
+            localVideoref.current.load();
+            
+            // Ensure video plays
+            localVideoref.current.play().catch(e => {
+              console.log("Video play error (this is usually fine):", e);
+            });
+          }
+
+          // Small delay to ensure local video element is updated
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Replace video tracks on all peer connections with delays to prevent race conditions
+          const connectionIds = Object.keys(connections);
+          for (let i = 0; i < connectionIds.length; i++) {
+            const id = connectionIds[i];
+            const pc = connections[id];
+            if (!pc) continue;
+            
+            console.log(`Updating video for connection: ${id} (${i + 1}/${connectionIds.length})`);
+            
+            try {
+              // Try to replace the video track
+              const trackReplaced = await replaceVideoTrackForConnection(pc, cameraTrack, id);
+              
+              if (!trackReplaced) {
+                console.log("Track replacement failed, using fallback method for:", id);
+                // Fallback: remove all streams and re-add
+                try {
+                  if (pc.getLocalStreams) {
+                    pc.getLocalStreams().forEach((s) => pc.removeStream(s));
+                  }
+                } catch (e) {
+                  console.log("Error removing streams:", e);
+                }
+                
+                try {
+                  pc.addStream(newLocalStream);
+                  console.log("Re-added stream for:", id);
+                } catch (e) {
+                  console.log("Error adding stream:", e);
+                }
+                
+                try {
+                  if (pc.signalingState === "stable") {
+                    const description = await pc.createOffer();
+                    await pc.setLocalDescription(description);
+                    socketRef.current.emit(
+                      "signal",
+                      id,
+                      JSON.stringify({ sdp: pc.localDescription })
+                    );
+                    console.log("Renegotiated with fallback method for:", id);
+                  } else {
+                    console.log("Skipping fallback renegotiation for:", id, "state:", pc.signalingState);
+                  }
+                } catch (e) {
+                  console.log("Error renegotiating with fallback:", e);
+                }
+              }
+              
+              // Add small delay between connections to prevent race conditions
+              if (i < connectionIds.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 50));
+              }
+            } catch (e) {
+              console.log("Error updating video for connection:", id, e);
+            }
+          }
+          
+          console.log("Video turn-on process completed successfully");
+          
+        } catch (error) {
+          console.error("Error turning video back on:", error);
+          // Revert the video state if there was an error
+          setVideo(false);
+          throw error;
+        }
+      }
+    } catch (e) {
+      console.log("Error in handleVideo:", e);
+      // Revert the video state if there was an error
+      setVideo(turningOff);
+    }
+  };
+  let handleAudio = async () => {
+    const turningOff = audio === true;
+    setAudio(!audio);
+
+    try {
+      if (turningOff) {
+        // Turning audio off: replace with silence track
+        console.log("Turning audio off...");
+        
+        // Create a silence audio track
+        const silenceTrack = silence();
+        
+        // Update local stream: keep existing video track if present
+        const videoTracks = window.localStream ? window.localStream.getVideoTracks() : [];
+        const newLocalStream = new MediaStream([...videoTracks, silenceTrack]);
         window.localStream = newLocalStream;
+        
         if (localVideoref.current) {
           localVideoref.current.srcObject = newLocalStream;
         }
 
-        // Replace on all senders; fallback to re-addStream + renegotiate
+        // Replace audio tracks on all peer connections
         for (let id in connections) {
           const pc = connections[id];
           if (!pc) continue;
-          const senders = pc.getSenders ? pc.getSenders() : [];
-          const videoSender = senders.find(
-            (s) => s.track && s.track.kind === "video"
-          );
-          if (videoSender && videoSender.replaceTrack) {
-            await videoSender.replaceTrack(cameraTrack);
-          } else {
+          
+          try {
+            await replaceAudioTrackForConnection(pc, silenceTrack, id);
+          } catch (e) {
+            console.log(`Error turning off audio for connection: ${id}`, e);
+          }
+        }
+        
+      } else {
+        // Turning audio on: reacquire microphone
+        console.log("Turning audio back on...");
+        
+        try {
+          // Get new microphone stream
+          const media = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }, 
+            video: false 
+          });
+          
+          const audioTrack = media.getAudioTracks()[0];
+          console.log("Got new audio track:", audioTrack);
+
+          // Update local stream: keep existing video track if present
+          const videoTracks = window.localStream ? window.localStream.getVideoTracks() : [];
+          const newLocalStream = new MediaStream([...videoTracks, audioTrack]);
+          window.localStream = newLocalStream;
+          
+          if (localVideoref.current) {
+            localVideoref.current.srcObject = newLocalStream;
+          }
+
+          // Replace audio tracks on all peer connections
+          for (let id in connections) {
+            const pc = connections[id];
+            if (!pc) continue;
+            
             try {
-              if (pc.getLocalStreams) {
-                pc.getLocalStreams().forEach((s) => pc.removeStream(s));
-              }
-            } catch {}
-            try {
-              pc.addStream(window.localStream);
-            } catch {}
-            try {
-              const description = await pc.createOffer();
-              await pc.setLocalDescription(description);
-              socketRef.current.emit(
-                "signal",
-                id,
-                JSON.stringify({ sdp: pc.localDescription })
-              );
+              await replaceAudioTrackForConnection(pc, audioTrack, id);
             } catch (e) {
-              console.log(e);
+              console.log(`Error turning on audio for connection: ${id}`, e);
             }
           }
+          
+          console.log("Audio turn-on process completed successfully");
+          
+        } catch (error) {
+          console.error("Error turning audio back on:", error);
+          // Revert the audio state if there was an error
+          setAudio(false);
+          throw error;
         }
       }
     } catch (e) {
-      console.log(e);
+      console.log("Error in handleAudio:", e);
+      // Revert the audio state if there was an error
+      setAudio(turningOff);
     }
-  };
-  let handleAudio = () => {
-    setAudio(!audio);
-    // getUserMedia();
   };
 
   useEffect(() => {
