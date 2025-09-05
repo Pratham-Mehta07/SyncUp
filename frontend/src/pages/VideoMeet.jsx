@@ -10,7 +10,9 @@ import MicIcon from "@mui/icons-material/Mic";
 import MicOffIcon from "@mui/icons-material/MicOff";
 import ScreenShareIcon from "@mui/icons-material/ScreenShare";
 import StopScreenShareIcon from "@mui/icons-material/StopScreenShare";
+import ChatIcon from "@mui/icons-material/Chat";
 import server from "../environment.js";
+import ChatModal from "./Chat.jsx";
 
 const server_url = server;
 
@@ -48,6 +50,11 @@ export default function VideoMeetComponent() {
   let [videos, setVideos] = useState([]);
   const [usernamesMap, setUsernamesMap] = useState({});
   const [leavingPeers, setLeavingPeers] = useState({});
+
+  // Chat state management
+  const [messages, setMessages] = useState([]);
+  const [message, setMessage] = useState("");
+  const [showChat, setShowChat] = useState(false);
 
   // TODO
   // if(isChrome() === false) {
@@ -363,6 +370,19 @@ export default function VideoMeetComponent() {
             return next;
           });
         }, 500);
+      });
+
+      // Chat message listener
+      socketRef.current.on("chat-message", (data, sender, socketIdSender) => {
+        // Only add message if it's not from the current user (to avoid duplicates)
+        if (socketIdSender !== socketIdRef.current) {
+          const messageData = {
+            sender: sender,
+            data: data,
+            timestamp: new Date(),
+          };
+          setMessages(prev => [...prev, messageData]);
+        }
       });
 
       socketRef.current.on("user-joined", (id, clients, roomUsernames) => {
@@ -706,6 +726,30 @@ export default function VideoMeetComponent() {
     getMedia();
   };
 
+  // Chat functions
+  const sendMessage = () => {
+    if (message.trim() && socketRef.current) {
+      const messageData = {
+        sender: username,
+        data: message.trim(),
+        timestamp: new Date(),
+      };
+      
+      // Add message to local state
+      setMessages(prev => [...prev, messageData]);
+      
+      // Emit message to other participants (backend expects data, sender format)
+      socketRef.current.emit("chat-message", message.trim(), username);
+      
+      // Clear input
+      setMessage("");
+    }
+  };
+
+  const toggleChat = () => {
+    setShowChat(!showChat);
+  };
+
   return (
     <div>
       {askForUsername === true ? (
@@ -772,6 +816,10 @@ export default function VideoMeetComponent() {
               <></>
             )}
 
+            <IconButton onClick={toggleChat} style={{ color: "white" }}>
+              <ChatIcon />
+            </IconButton>
+
           </div>
 
           <div className={styles.localVideoWrapper}>
@@ -807,7 +855,19 @@ export default function VideoMeetComponent() {
             ))}
           </div>
 
-          {/* Participants list removed as requested */}
+          {/* Chat Modal */}
+          {showChat && (
+            <ChatModal
+              messages={messages}
+              username={username}
+              message={message}
+              setMessage={setMessage}
+              sendMessage={sendMessage}
+              onClose={() => setShowChat(false)}
+              socketRef={socketRef}
+              socketIdRef={socketIdRef}
+            />
+          )}
         </div>
       )}
     </div>
