@@ -7,25 +7,31 @@ import { IconButton } from "@mui/material";
 
 const chatModalStyles = {
   position: "fixed",
-  top: 0,
-  right: 0,
-  width: "50vh",
-  height: "100vh",
-  backgroundColor: "#1f2937",
+  top: "5vh",
+  right: "20px",
+  width: "360px",
+  height: "90vh",
+  background: "rgba(255, 255, 255, 0.95)",
+  backdropFilter: "blur(25px)",
+  borderRadius: "20px",
   zIndex: 1000,
   display: "flex",
   flexDirection: "column",
-  borderLeft: "1px solid #374151",
+  border: "1px solid rgba(255, 255, 255, 0.3)",
+  boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.4)",
+  overflow: "hidden",
+  animation: "slideInFromRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
 };
 
 const chatHeaderStyles = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  backgroundColor: "#374151",
-  padding: "16px 24px",
-  borderBottom: "1px solid #4b5563",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+  background: "linear-gradient(to bottom right, #1e1e2f, #2a2e3d)",
+  padding: "24px",
+  borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+  boxShadow: "0 4px 20px rgba(102, 126, 234, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
+  borderRadius: "20px 20px 0 0",
 };
 
 const chatTitleStyles = {
@@ -33,15 +39,18 @@ const chatTitleStyles = {
   fontSize: "20px",
   fontWeight: "600",
   margin: 0,
+  textShadow: "0 2px 4px rgba(0, 0, 0, 0.2)",
 };
 
 const messagesContainerStyles = {
   flex: 1,
   overflowY: "auto",
-  padding: "16px",
+  padding: "20px",
   display: "flex",
   flexDirection: "column",
   gap: "16px",
+  background: "rgba(248, 249, 250, 0.95)",
+  backdropFilter: "blur(10px)",
 };
 
 const avatarStyles = {
@@ -56,18 +65,22 @@ const avatarStyles = {
 
 const botAvatarStyles = {
   ...avatarStyles,
-  backgroundColor: "#3b82f6",
+  background: "linear-gradient(135deg, #667eea, #764ba2)",
+  boxShadow: "0 4px 12px rgba(102, 126, 234, 0.3)",
 };
 
 const userAvatarStyles = {
   ...avatarStyles,
-  backgroundColor: "#4b5563",
+  background: "linear-gradient(135deg, #4caf50, #45a049)",
+  boxShadow: "0 4px 12px rgba(76, 175, 80, 0.3)",
 };
 
 const usernameStyles = {
-  marginBottom: "4px",
+  marginBottom: "6px",
   fontSize: "12px",
-  fontWeight: "500",
+  fontWeight: "600",
+  textTransform: "uppercase",
+  letterSpacing: "0.5px",
 };
 
 const messageBubbleStyles = {
@@ -78,29 +91,33 @@ const messageBubbleStyles = {
 
 const userMessageStyles = {
   ...messageBubbleStyles,
-  backgroundColor: "#3b82f6",
+  background: "linear-gradient(135deg, #667eea, #764ba2)",
   color: "white",
-  borderBottomRightRadius: "4px",
+  borderBottomRightRadius: "6px",
+  boxShadow: "0 4px 12px rgba(102, 126, 234, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2)",
 };
 
 const otherMessageStyles = {
   ...messageBubbleStyles,
-  backgroundColor: "#374151",
-  color: "#f3f4f6",
-  border: "1px solid #4b5563",
-  borderBottomLeftRadius: "4px",
+  background: "linear-gradient(135deg, #f8f9fa, #e9ecef)",
+  color: "#2c3e50",
+  border: "1px solid rgba(255, 255, 255, 0.3)",
+  borderBottomLeftRadius: "6px",
+  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5)",
 };
 
 const messageTextStyles = {
   fontSize: "14px",
-  lineHeight: "1.4",
+  lineHeight: "1.5",
   margin: 0,
+  wordWrap: "break-word",
 };
 
 const timestampStyles = {
-  marginTop: "4px",
-  fontSize: "12px",
-  color: "#9ca3af",
+  marginTop: "6px",
+  fontSize: "11px",
+  color: "#6c757d",
+  fontWeight: "500",
 };
 
 const emptyStateStyles = {
@@ -109,24 +126,30 @@ const emptyStateStyles = {
   alignItems: "center",
   justifyContent: "center",
   height: "100%",
-  color: "#9ca3af",
+  color: "#6c757d",
+  padding: "40px 20px",
 };
 
 const emptyIconStyles = {
   width: "64px",
   height: "64px",
-  backgroundColor: "#374151",
+  background: "linear-gradient(135deg, #667eea, #764ba2)",
   borderRadius: "50%",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   marginBottom: "16px",
+  boxShadow: "0 8px 24px rgba(102, 126, 234, 0.3)",
 };
 
 const inputAreaStyles = {
-  backgroundColor: "#374151",
-  borderTop: "1px solid #4b5563",
-  padding: "16px",
+  background: "white",
+  borderTop: "1px solid rgba(0, 0, 0, 0.08)",
+  padding: "20px",
+  display: "flex",
+  gap: "12px",
+  alignItems: "flex-end",
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.5)",
 };
 
 const inputContainerStyles = {
@@ -138,16 +161,17 @@ const inputContainerStyles = {
 const textareaStyles = {
   width: "100%",
   padding: "12px 16px",
-  backgroundColor: "#374151",
-  border: "1px solid #4b5563",
-  color: "#f3f4f6",
-  borderRadius: "12px",
+  background: "rgba(248, 249, 250, 0.8)",
+  border: "1px solid rgba(0, 0, 0, 0.1)",
+  color: "#2c3e50",
+  borderRadius: "25px",
   resize: "none",
   outline: "none",
   minHeight: "44px",
   maxHeight: "120px",
   fontSize: "14px",
   fontFamily: "inherit",
+  transition: "all 0.3s ease",
 };
 
 const sendButtonStyles = {
@@ -155,11 +179,12 @@ const sendButtonStyles = {
   height: "44px",
   color: "white",
   border: "none",
-  borderRadius: "12px",
+  borderRadius: "25px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  transition: "background-color 0.2s",
+  transition: "all 0.3s ease",
+  boxShadow: "0 4px 15px rgba(102, 126, 234, 0.3)",
 };
 
 export default function ChatModal({
@@ -173,6 +198,81 @@ export default function ChatModal({
   socketIdRef,
 }) {
   const messagesEndRef = useRef(null);
+
+  // Add CSS animations
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes slideInFromRight {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes messageSlideIn {
+      from {
+        transform: translateY(20px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    
+    /* Custom scrollbar for messages container */
+    .messages-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    .messages-container::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 3px;
+    }
+    
+    .messages-container::-webkit-scrollbar-thumb {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.3), rgba(118, 75, 162, 0.3));
+      border-radius: 3px;
+    }
+    
+    .messages-container::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.5), rgba(118, 75, 162, 0.5));
+    }
+    
+    /* Responsive design */
+    @media (max-width: 1200px) {
+      .chat-modal {
+        width: 320px !important;
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .chat-modal {
+        position: fixed !important;
+        top: 0 !important;
+        right: 0 !important;
+        left: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        border-radius: 0 !important;
+        z-index: 20 !important;
+      }
+    }
+  `;
+  
+  useEffect(() => {
+    document.head.appendChild(style);
+    return () => {
+      if (document.head.contains(style)) {
+        document.head.removeChild(style);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -192,7 +292,7 @@ export default function ChatModal({
   };
 
   return (
-    <div style={chatModalStyles}>
+    <div style={chatModalStyles} className="chat-modal">
       <div style={chatHeaderStyles}>
         <h1 style={chatTitleStyles}>Chat</h1>
         <IconButton onClick={onClose} style={{ color: "white" }}>
@@ -200,7 +300,7 @@ export default function ChatModal({
         </IconButton>
       </div>
 
-      <div style={messagesContainerStyles}>
+      <div style={messagesContainerStyles} className="messages-container">
         {messages.length > 0 ? (
           messages.map((item, index) => {
             const isCurrentUser = item.sender === username;
@@ -212,6 +312,7 @@ export default function ChatModal({
                   alignItems: "flex-start",
                   gap: "12px",
                   justifyContent: isCurrentUser ? "flex-end" : "flex-start",
+                  animation: "messageSlideIn 0.3s ease-out",
                 }}
               >
                 {!isCurrentUser && (
@@ -312,8 +413,18 @@ export default function ChatModal({
               placeholder="Type your message..."
               style={textareaStyles}
               rows="1"
-              onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-              onBlur={(e) => (e.target.style.borderColor = "#4b5563")}
+              onFocus={(e) => {
+                e.target.style.borderColor = "#667eea";
+                e.target.style.background = "white";
+                e.target.style.transform = "translateY(-1px)";
+                e.target.style.boxShadow = "0 4px 20px rgba(102, 126, 234, 0.15)";
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = "rgba(0, 0, 0, 0.1)";
+                e.target.style.background = "rgba(248, 249, 250, 0.8)";
+                e.target.style.transform = "translateY(0)";
+                e.target.style.boxShadow = "none";
+              }}
             />
           </div>
           <button
@@ -321,16 +432,24 @@ export default function ChatModal({
             disabled={!message.trim()}
             style={{
               ...sendButtonStyles,
-              backgroundColor: message.trim() ? "#3b82f6" : "#6b7280",
+              background: message.trim() 
+                ? "linear-gradient(135deg, #667eea, #764ba2)" 
+                : "linear-gradient(135deg, #6c757d, #5a6268)",
               cursor: message.trim() ? "pointer" : "not-allowed",
             }}
             onMouseEnter={(e) => {
-              if (message.trim()) e.target.style.backgroundColor = "#2563eb";
+              if (message.trim()) {
+                e.target.style.background = "linear-gradient(135deg, #5a6fd8, #6a4190)";
+                e.target.style.transform = "translateY(-2px)";
+                e.target.style.boxShadow = "0 6px 20px rgba(102, 126, 234, 0.4)";
+              }
             }}
             onMouseLeave={(e) => {
-              e.target.style.backgroundColor = message.trim()
-                ? "#3b82f6"
-                : "#6b7280";
+              e.target.style.background = message.trim()
+                ? "linear-gradient(135deg, #667eea, #764ba2)"
+                : "linear-gradient(135deg, #6c757d, #5a6268)";
+              e.target.style.transform = "translateY(0)";
+              e.target.style.boxShadow = "0 4px 15px rgba(102, 126, 234, 0.3)";
             }}
           >
             <SendIcon style={{ width: "16px", height: "16px" }} />
