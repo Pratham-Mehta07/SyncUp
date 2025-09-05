@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import io from "socket.io-client";
-import { Badge, IconButton, TextField } from "@mui/material";
+import { IconButton } from "@mui/material";
 import { Button } from "@mui/material";
 import VideocamIcon from "@mui/icons-material/Videocam";
 import VideocamOffIcon from "@mui/icons-material/VideocamOff";
@@ -10,174 +10,12 @@ import MicIcon from "@mui/icons-material/Mic";
 import MicOffIcon from "@mui/icons-material/MicOff";
 import ScreenShareIcon from "@mui/icons-material/ScreenShare";
 import StopScreenShareIcon from "@mui/icons-material/StopScreenShare";
-import ChatIcon from "@mui/icons-material/Chat";
-import SendIcon from "@mui/icons-material/Send";
-import PersonIcon from "@mui/icons-material/Person";
-import SmartToyIcon from "@mui/icons-material/SmartToy";
 import server from "../environment.js";
-import CloseIcon from "@mui/icons-material/Close";
 
 const server_url = server;
 
 var connections = {};
 
-// Move all styles outside component to prevent re-renders
-const chatModalStyles = {
-  position: "fixed",
-  top: 0,
-  right: 0,
-  width: "50vh",
-  height: "100vh",
-  backgroundColor: "#1f2937",
-  zIndex: 1000,
-  display: "flex",
-  flexDirection: "column",
-  borderLeft: "1px solid #374151",
-};
-
-const chatHeaderStyles = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  backgroundColor: "#374151",
-  padding: "16px 24px",
-  borderBottom: "1px solid #4b5563",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-};
-
-const chatTitleStyles = {
-  color: "white",
-  fontSize: "20px",
-  fontWeight: "600",
-  margin: 0,
-};
-
-const messagesContainerStyles = {
-  flex: 1,
-  overflowY: "auto",
-  padding: "16px",
-  display: "flex",
-  flexDirection: "column",
-  gap: "16px",
-};
-
-const avatarStyles = {
-  width: "32px",
-  height: "32px",
-  borderRadius: "50%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-};
-
-const botAvatarStyles = {
-  ...avatarStyles,
-  backgroundColor: "#3b82f6",
-};
-
-const userAvatarStyles = {
-  ...avatarStyles,
-  backgroundColor: "#4b5563",
-};
-
-const usernameStyles = {
-  marginBottom: "4px",
-  fontSize: "12px",
-  fontWeight: "500",
-};
-
-const messageBubbleStyles = {
-  padding: "8px 16px",
-  borderRadius: "16px",
-  boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
-};
-
-const userMessageStyles = {
-  ...messageBubbleStyles,
-  backgroundColor: "#3b82f6",
-  color: "white",
-  borderBottomRightRadius: "4px",
-};
-
-const otherMessageStyles = {
-  ...messageBubbleStyles,
-  backgroundColor: "#374151",
-  color: "#f3f4f6",
-  border: "1px solid #4b5563",
-  borderBottomLeftRadius: "4px",
-};
-
-const messageTextStyles = {
-  fontSize: "14px",
-  lineHeight: "1.4",
-  margin: 0,
-};
-
-const timestampStyles = {
-  marginTop: "4px",
-  fontSize: "12px",
-  color: "#9ca3af",
-};
-
-const emptyStateStyles = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  height: "100%",
-  color: "#9ca3af",
-};
-
-const emptyIconStyles = {
-  width: "64px",
-  height: "64px",
-  backgroundColor: "#374151",
-  borderRadius: "50%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  marginBottom: "16px",
-};
-
-const inputAreaStyles = {
-  backgroundColor: "#374151",
-  borderTop: "1px solid #4b5563",
-  padding: "16px",
-};
-
-const inputContainerStyles = {
-  display: "flex",
-  alignItems: "flex-end",
-  gap: "12px",
-};
-
-const textareaStyles = {
-  width: "100%",
-  padding: "12px 16px",
-  backgroundColor: "#374151",
-  border: "1px solid #4b5563",
-  color: "#f3f4f6",
-  borderRadius: "12px",
-  resize: "none",
-  outline: "none",
-  minHeight: "44px",
-  maxHeight: "120px",
-  fontSize: "14px",
-  fontFamily: "inherit",
-};
-
-const sendButtonStyles = {
-  width: "44px",
-  height: "44px",
-  color: "white",
-  border: "none",
-  borderRadius: "12px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  transition: "background-color 0.2s",
-};
 
 const peerConfigConnections = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -199,15 +37,7 @@ export default function VideoMeetComponent() {
 
   let [screen, setScreen] = useState();
 
-  let [showModal, setModal] = useState(false);
-
   let [screenAvailable, setScreenAvailable] = useState();
-
-  let [messages, setMessages] = useState([]);
-
-  let [message, setMessage] = useState("");
-
-  let [newMessages, setNewMessages] = useState(0);
 
   let [askForUsername, setAskForUsername] = useState(true);
 
@@ -216,6 +46,8 @@ export default function VideoMeetComponent() {
   const videoRef = useRef([]);
 
   let [videos, setVideos] = useState([]);
+  const [usernamesMap, setUsernamesMap] = useState({});
+  const [leavingPeers, setLeavingPeers] = useState({});
 
   // TODO
   // if(isChrome() === false) {
@@ -310,18 +142,25 @@ export default function VideoMeetComponent() {
 
     for (let id in connections) {
       if (id === socketIdRef.current) continue;
+      const pc = connections[id];
+      try {
+        const senders = pc.getSenders ? pc.getSenders() : [];
+        const hasVideo = senders.some((s) => s.track && s.track.kind === "video");
+        const hasAudio = senders.some((s) => s.track && s.track.kind === "audio");
+        const vt = window.localStream.getVideoTracks()[0];
+        const at = window.localStream.getAudioTracks()[0];
+        if (!hasVideo && vt) pc.addTrack(vt, window.localStream);
+        if (!hasAudio && at) pc.addTrack(at, window.localStream);
+      } catch (e) {}
 
-      connections[id].addStream(window.localStream);
-
-      connections[id].createOffer().then((description) => {
-        console.log(description);
-        connections[id]
+      pc.createOffer().then((description) => {
+        pc
           .setLocalDescription(description)
           .then(() => {
             socketRef.current.emit(
               "signal",
               id,
-              JSON.stringify({ sdp: connections[id].localDescription })
+              JSON.stringify({ sdp: pc.localDescription })
             );
           })
           .catch((e) => console.log(e));
@@ -394,17 +233,25 @@ export default function VideoMeetComponent() {
 
     for (let id in connections) {
       if (id === socketIdRef.current) continue;
+      const pc = connections[id];
+      try {
+        const senders = pc.getSenders ? pc.getSenders() : [];
+        const hasVideo = senders.some((s) => s.track && s.track.kind === "video");
+        const hasAudio = senders.some((s) => s.track && s.track.kind === "audio");
+        const vt = window.localStream.getVideoTracks()[0];
+        const at = window.localStream.getAudioTracks()[0];
+        if (!hasVideo && vt) pc.addTrack(vt, window.localStream);
+        if (!hasAudio && at) pc.addTrack(at, window.localStream);
+      } catch (e) {}
 
-      connections[id].addStream(window.localStream);
-
-      connections[id].createOffer().then((description) => {
-        connections[id]
+      pc.createOffer().then((description) => {
+        pc
           .setLocalDescription(description)
           .then(() => {
             socketRef.current.emit(
               "signal",
               id,
-              JSON.stringify({ sdp: connections[id].localDescription })
+              JSON.stringify({ sdp: pc.localDescription })
             );
           })
           .catch((e) => console.log(e));
@@ -478,20 +325,55 @@ export default function VideoMeetComponent() {
     socketRef.current.on("signal", gotMessageFromServer);
 
     socketRef.current.on("connect", () => {
-      socketRef.current.emit("join-call", window.location.href);
+      socketRef.current.emit("join-call", window.location.href, username);
       socketIdRef.current = socketRef.current.id;
 
-      socketRef.current.on("chat-message", addMessage);
 
       socketRef.current.on("user-left", (id) => {
-        setVideos((videos) => videos.filter((video) => video.socketId !== id));
+        // Mark tile as leaving (black overlay)
+        setLeavingPeers((prev) => ({ ...prev, [id]: true }));
+        // Close and remove RTCPeerConnection if exists
+        try {
+          if (connections[id]) {
+            connections[id].onaddstream = null;
+            connections[id].onicecandidate = null;
+            connections[id].oniceconnectionstatechange = null;
+            connections[id].close();
+            delete connections[id];
+          }
+        } catch (e) {
+          console.log(e);
+        }
+
+        // Remove after a short delay to show black overlay immediately
+        setTimeout(() => {
+          setVideos((prev) => {
+            const filtered = prev.filter((video) => video.socketId !== id);
+            videoRef.current = filtered;
+            return filtered;
+          });
+          setUsernamesMap((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+          setLeavingPeers((prev) => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+        }, 500);
       });
 
-      socketRef.current.on("user-joined", (id, clients) => {
+      socketRef.current.on("user-joined", (id, clients, roomUsernames) => {
+        if (roomUsernames && typeof roomUsernames === "object") {
+          setUsernamesMap(roomUsernames);
+        }
         clients.forEach((socketListId) => {
-          connections[socketListId] = new RTCPeerConnection(
-            peerConfigConnections
-          );
+          if (connections[socketListId]) {
+            return; // Avoid creating duplicate peer connections
+          }
+          connections[socketListId] = new RTCPeerConnection(peerConfigConnections);
           // Wait for their ice candidate
           connections[socketListId].onicecandidate = function (event) {
             if (event.candidate != null) {
@@ -503,63 +385,137 @@ export default function VideoMeetComponent() {
             }
           };
 
-          // Wait for their video stream
-          connections[socketListId].onaddstream = (event) => {
-            console.log("BEFORE:", videoRef.current);
-            console.log("FINDING ID: ", socketListId);
+          // Auto-cleanup on connection state change
+          connections[socketListId].oniceconnectionstatechange = () => {
+            const state = connections[socketListId].iceConnectionState;
+            if (state === "disconnected" || state === "failed" || state === "closed") {
+              // Mark as leaving (black overlay) immediately
+              setLeavingPeers((prev) => ({ ...prev, [socketListId]: true }));
+              try {
+                if (connections[socketListId]) {
+                  connections[socketListId].onaddstream = null;
+                  connections[socketListId].onicecandidate = null;
+                  connections[socketListId].oniceconnectionstatechange = null;
+                  connections[socketListId].close();
+                  delete connections[socketListId];
+                }
+              } catch (e) {
+                console.log(e);
+              }
+              setTimeout(() => {
+                setVideos((prev) => {
+                  const filtered = prev.filter((v) => v.socketId !== socketListId);
+                  videoRef.current = filtered;
+                  return filtered;
+                });
+                setUsernamesMap((prev) => {
+                  const next = { ...prev };
+                  delete next[socketListId];
+                  return next;
+                });
+                setLeavingPeers((prev) => {
+                  const next = { ...prev };
+                  delete next[socketListId];
+                  return next;
+                });
+              }, 500);
+            }
+          };
 
-            let videoExists = videoRef.current.find(
-              (video) => video.socketId === socketListId
-            );
+          // Unified modern ontrack handler (replaces onaddstream usage)
+          connections[socketListId].ontrack = (event) => {
+            const [stream] = event.streams;
+            const track = event.track;
 
-            if (videoExists) {
-              console.log("FOUND EXISTING");
+            const removeTile = () => {
+              setLeavingPeers((prev) => ({ ...prev, [socketListId]: true }));
+              setTimeout(() => {
+                setVideos((prev) => {
+                  const filtered = prev.filter((v) => v.socketId !== socketListId);
+                  videoRef.current = filtered;
+                  return filtered;
+                });
+                setUsernamesMap((prev) => {
+                  const next = { ...prev };
+                  delete next[socketListId];
+                  return next;
+                });
+                setLeavingPeers((prev) => {
+                  const next = { ...prev };
+                  delete next[socketListId];
+                  return next;
+                });
+              }, 500);
+            };
+            if (track && track.addEventListener) {
+              track.addEventListener("ended", removeTile, { once: true });
+            }
 
-              // Update the stream of the existing video
-              setVideos((videos) => {
-                const updatedVideos = videos.map((video) =>
-                  video.socketId === socketListId
-                    ? { ...video, stream: event.stream }
-                    : video
+            const existing = videoRef.current.find((v) => v.socketId === socketListId);
+            if (existing) {
+              setVideos((prev) => {
+                const updated = prev.map((v) =>
+                  v.socketId === socketListId ? { ...v, stream: stream } : v
                 );
-                videoRef.current = updatedVideos;
-                return updatedVideos;
+                videoRef.current = updated;
+                return updated;
               });
             } else {
-              // Create a new video
-              console.log("CREATING NEW");
-              let newVideo = {
+              const newVideo = {
                 socketId: socketListId,
-                stream: event.stream,
+                stream: stream,
                 autoplay: true,
                 playsinline: true,
               };
-
-              setVideos((videos) => {
-                const updatedVideos = [...videos, newVideo];
-                videoRef.current = updatedVideos;
-                return updatedVideos;
+              setVideos((prev) => {
+                // Ensure uniqueness by socketId before adding
+                const withoutDup = prev.filter((v) => v.socketId !== socketListId);
+                const updated = [...withoutDup, newVideo];
+                videoRef.current = updated;
+                return updated;
               });
             }
           };
 
-          // Add the local video stream
-          if (window.localStream !== undefined && window.localStream !== null) {
-            connections[socketListId].addStream(window.localStream);
-          } else {
-            let blackSilence = (...args) =>
-              new MediaStream([black(...args), silence()]);
+          // Add local tracks via addTrack
+          const ensureLocalStream = () => {
+            if (window.localStream !== undefined && window.localStream !== null) {
+              return window.localStream;
+            }
+            let blackSilence = (...args) => new MediaStream([black(...args), silence()]);
             window.localStream = blackSilence();
-            connections[socketListId].addStream(window.localStream);
-          }
+            return window.localStream;
+          };
+          const ls = ensureLocalStream();
+          try {
+            const pc = connections[socketListId];
+            const senders = pc.getSenders ? pc.getSenders() : [];
+            const hasVideo = senders.some((s) => s.track && s.track.kind === "video");
+            const hasAudio = senders.some((s) => s.track && s.track.kind === "audio");
+            const vt = ls.getVideoTracks()[0];
+            const at = ls.getAudioTracks()[0];
+            if (!hasVideo && vt) pc.addTrack(vt, ls);
+            if (!hasAudio && at) pc.addTrack(at, ls);
+          } catch (e) {}
         });
 
         if (id === socketIdRef.current) {
           for (let id2 in connections) {
             if (id2 === socketIdRef.current) continue;
+            if (!connections[id2]) continue; // Skip if not initialized
 
             try {
-              connections[id2].addStream(window.localStream);
+              const pc = connections[id2];
+              const ls = window.localStream;
+              if (ls && pc) {
+                const senders = pc.getSenders ? pc.getSenders() : [];
+                const hasVideo = senders.some((s) => s.track && s.track.kind === "video");
+                const hasAudio = senders.some((s) => s.track && s.track.kind === "audio");
+                const vt = ls.getVideoTracks()[0];
+                const at = ls.getAudioTracks()[0];
+                if (!hasVideo && vt) pc.addTrack(vt, ls);
+                if (!hasAudio && at) pc.addTrack(at, ls);
+              }
             } catch (e) {}
 
             connections[id2].createOffer().then((description) => {
@@ -598,9 +554,129 @@ export default function VideoMeetComponent() {
     return Object.assign(stream.getVideoTracks()[0], { enabled: false });
   };
 
-  let handleVideo = () => {
+  // Create a black video track that is enabled, so receivers immediately render black
+  let createBlackVideoTrack = ({ width = 640, height = 480 } = {}) => {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, width, height);
+    const stream = canvas.captureStream(10);
+    const track = stream.getVideoTracks()[0];
+    track.enabled = true; // ensure black frames are sent
+    return track;
+  };
+
+  let handleVideo = async () => {
+    const turningOff = video === true;
     setVideo(!video);
-    // getUserMedia();
+
+    try {
+      if (turningOff) {
+        // Replace outgoing video track with an enabled black track so remotes see black instantly
+        const blackTrack = createBlackVideoTrack();
+
+        // Update local stream
+        try {
+          const currentStream = localVideoref.current?.srcObject;
+          if (currentStream) {
+            currentStream.getVideoTracks().forEach((t) => t.stop());
+          }
+        } catch {}
+
+        const newLocalStream = new MediaStream([
+          blackTrack,
+          ...(window.localStream?.getAudioTracks() || []),
+        ]);
+        window.localStream = newLocalStream;
+        if (localVideoref.current) {
+          localVideoref.current.srcObject = newLocalStream;
+        }
+
+        // Replace on all senders; fallback to re-addStream + renegotiate
+        for (let id in connections) {
+          const pc = connections[id];
+          if (!pc) continue;
+          const senders = pc.getSenders ? pc.getSenders() : [];
+          const videoSender = senders.find(
+            (s) => s.track && s.track.kind === "video"
+          );
+          if (videoSender && videoSender.replaceTrack) {
+            await videoSender.replaceTrack(blackTrack);
+          } else {
+            try {
+              if (pc.getLocalStreams) {
+                pc.getLocalStreams().forEach((s) => pc.removeStream(s));
+              }
+            } catch {}
+            try {
+              pc.addStream(window.localStream);
+            } catch {}
+            try {
+              const description = await pc.createOffer();
+              await pc.setLocalDescription(description);
+              socketRef.current.emit(
+                "signal",
+                id,
+                JSON.stringify({ sdp: pc.localDescription })
+              );
+            } catch (e) {
+              console.log(e);
+            }
+          }
+        }
+      } else {
+        // Turning on: reacquire camera video track and replace
+        const media = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        const cameraTrack = media.getVideoTracks()[0];
+
+        // Update local stream: keep existing audio track if present
+        const newLocalStream = new MediaStream([
+          cameraTrack,
+          ...(window.localStream?.getAudioTracks() || []),
+        ]);
+        window.localStream = newLocalStream;
+        if (localVideoref.current) {
+          localVideoref.current.srcObject = newLocalStream;
+        }
+
+        // Replace on all senders; fallback to re-addStream + renegotiate
+        for (let id in connections) {
+          const pc = connections[id];
+          if (!pc) continue;
+          const senders = pc.getSenders ? pc.getSenders() : [];
+          const videoSender = senders.find(
+            (s) => s.track && s.track.kind === "video"
+          );
+          if (videoSender && videoSender.replaceTrack) {
+            await videoSender.replaceTrack(cameraTrack);
+          } else {
+            try {
+              if (pc.getLocalStreams) {
+                pc.getLocalStreams().forEach((s) => pc.removeStream(s));
+              }
+            } catch {}
+            try {
+              pc.addStream(window.localStream);
+            } catch {}
+            try {
+              const description = await pc.createOffer();
+              await pc.setLocalDescription(description);
+              socketRef.current.emit(
+                "signal",
+                id,
+                JSON.stringify({ sdp: pc.localDescription })
+              );
+            } catch (e) {
+              console.log(e);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.log(e);
+    }
   };
   let handleAudio = () => {
     setAudio(!audio);
@@ -624,45 +700,6 @@ export default function VideoMeetComponent() {
     window.location.href = "/";
   };
 
-  let openChat = () => {
-    setModal(true);
-    setNewMessages(0);
-  };
-  let closeChat = () => {
-    setModal(false);
-  };
-  let handleMessage = (e) => {
-    setMessage(e.target.value);
-  };
-
-  const addMessage = (data, sender, socketIdSender) => {
-    setMessages((prevMessages) => [
-      ...prevMessages,
-      { sender: sender, data: data, timestamp: new Date() },
-    ]);
-    if (socketIdSender !== socketIdRef.current) {
-      setNewMessages((prevNewMessages) => prevNewMessages + 1);
-    }
-  };
-
-  let sendMessage = () => {
-    if (message.trim()) {
-      console.log(socketRef.current);
-      socketRef.current.emit("chat-message", message, username);
-      setMessage("");
-    }
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
-
-  const formatTime = (date) => {
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
 
   let connect = () => {
     setAskForUsername(false);
@@ -711,162 +748,6 @@ export default function VideoMeetComponent() {
         </div>
       ) : (
         <div className={styles.meetVideoContainer}>
-          {showModal ? (
-            <div style={chatModalStyles}>
-              {/* Professional Chat Header */}
-              <div style={chatHeaderStyles}>
-                <h1 style={chatTitleStyles}>Chat</h1>
-                <CloseIcon onClick={closeChat} style={{ cursor: "pointer" }} />
-              </div>
-
-              {/* Messages Container */}
-              <div style={messagesContainerStyles}>
-                {messages.length !== 0 ? (
-                  messages.map((item, index) => {
-                    const isCurrentUser = item.sender === username;
-                    return (
-                      <div
-                        key={index}
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: "12px",
-                          justifyContent: isCurrentUser
-                            ? "flex-end"
-                            : "flex-start",
-                        }}
-                      >
-                        {!isCurrentUser && (
-                          <div style={botAvatarStyles}>
-                            <SmartToyIcon
-                              style={{
-                                width: "16px",
-                                height: "16px",
-                                color: "white",
-                              }}
-                            />
-                          </div>
-                        )}
-
-                        <div
-                          style={{
-                            maxWidth: "280px",
-                            order: isCurrentUser ? 1 : 2,
-                          }}
-                        >
-                          <div
-                            style={{
-                              ...usernameStyles,
-                              textAlign: isCurrentUser ? "right" : "left",
-                              color: isCurrentUser ? "#d1d5db" : "#9ca3af",
-                            }}
-                          >
-                            {item.sender}
-                          </div>
-
-                          <div
-                            style={
-                              isCurrentUser
-                                ? userMessageStyles
-                                : otherMessageStyles
-                            }
-                          >
-                            <p style={messageTextStyles}>{item.data}</p>
-                          </div>
-
-                          <div
-                            style={{
-                              ...timestampStyles,
-                              textAlign: isCurrentUser ? "right" : "left",
-                            }}
-                          >
-                            {item.timestamp ? formatTime(item.timestamp) : ""}
-                          </div>
-                        </div>
-
-                        {isCurrentUser && (
-                          <div style={{ ...userAvatarStyles, order: 2 }}>
-                            <PersonIcon
-                              style={{
-                                width: "16px",
-                                height: "16px",
-                                color: "#d1d5db",
-                              }}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div style={emptyStateStyles}>
-                    <div style={emptyIconStyles}>
-                      <SmartToyIcon
-                        style={{
-                          width: "32px",
-                          height: "32px",
-                          color: "#6b7280",
-                        }}
-                      />
-                    </div>
-                    <p
-                      style={{ fontSize: "18px", fontWeight: "500", margin: 0 }}
-                    >
-                      No messages yet
-                    </p>
-                    <p
-                      style={{
-                        fontSize: "14px",
-                        color: "#6b7280",
-                        marginTop: "4px",
-                        margin: 0,
-                      }}
-                    >
-                      Start a conversation to get started
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Input Area */}
-              <div style={inputAreaStyles}>
-                <div style={inputContainerStyles}>
-                  <div style={{ flex: 1 }}>
-                    <textarea
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      onKeyPress={handleKeyPress}
-                      placeholder="Type your message..."
-                      style={textareaStyles}
-                      rows="1"
-                      onFocus={(e) => (e.target.style.borderColor = "#3b82f6")}
-                      onBlur={(e) => (e.target.style.borderColor = "#4b5563")}
-                    />
-                  </div>
-                  <button
-                    onClick={sendMessage}
-                    disabled={!message.trim()}
-                    style={{
-                      ...sendButtonStyles,
-                      backgroundColor: message.trim() ? "#3b82f6" : "#6b7280",
-                      cursor: message.trim() ? "pointer" : "not-allowed",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (message.trim())
-                        e.target.style.backgroundColor = "#2563eb";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = message.trim()
-                        ? "#3b82f6"
-                        : "#6b7280";
-                    }}
-                  >
-                    <SendIcon style={{ width: "16px", height: "16px" }} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : null}
 
           <div className={styles.buttonContainers}>
             <IconButton onClick={handleVideo} style={{ color: "white" }}>
@@ -891,26 +772,16 @@ export default function VideoMeetComponent() {
               <></>
             )}
 
-            <Badge
-              badgeContent={newMessages}
-              max={999}
-              style={{ color: "white" }}
-            >
-              <IconButton
-                onClick={() => setModal(!showModal)}
-                style={{ color: "white" }}
-              >
-                <ChatIcon />{" "}
-              </IconButton>
-            </Badge>
           </div>
 
-          <video
-            className={styles.meetUserVideo}
-            ref={localVideoref}
-            autoPlay
-            muted
-          ></video>
+          <div className={styles.localVideoWrapper}>
+            <video
+              ref={localVideoref}
+              autoPlay
+              muted
+            ></video>
+            <div className={styles.nameLabel}>{username || "You"}</div>
+          </div>
 
           <div className={styles.conferenceView}>
             {videos.map((video) => (
@@ -924,9 +795,19 @@ export default function VideoMeetComponent() {
                   }}
                   autoPlay
                 ></video>
+                {leavingPeers[video.socketId] && (
+                  <div className={styles.leavingOverlay}></div>
+                )}
+                <div className={styles.nameLabel}>
+                  {usernamesMap[video.socketId]
+                    ? usernamesMap[video.socketId]
+                    : `User-${String(video.socketId).slice(0, 5)}`}
+                </div>
               </div>
             ))}
           </div>
+
+          {/* Participants list removed as requested */}
         </div>
       )}
     </div>

@@ -32,27 +32,41 @@ const login = async (req, res) => {
 };
 
 const register = async (req, res) => {
-  const { name, username, password } = req.body;
+  const { name, username, email, password } = req.body;
 
   try {
+    // check if username already exists
     const existingUser = await User.findOne({ username });
     if (existingUser) {
       return res
         .status(httpStatus.FOUND)
-        .json({ message: "User already exist" });
+        .json({ message: "User already exists" });
     }
+
+    // check if email already exists
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
+      return res
+        .status(httpStatus.FOUND)
+        .json({ message: "Email already in use" });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    console.log("hi,", name, username, password);
+
     const newUser = new User({
       name: name,
       username: username,
+      email: email,
       password: hashedPassword,
+      verified: false, // for email verification later
     });
 
     await newUser.save();
     res.status(httpStatus.CREATED).json({ message: "User Created" });
   } catch (e) {
-    res.json({ message: `Something went wrong ${e}` });
+    res
+      .status(httpStatus.INTERNAL_SERVER_ERROR)
+      .json({ message: `Something went wrong ${e}` });
   }
 };
 
