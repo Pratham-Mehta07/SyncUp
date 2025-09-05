@@ -114,20 +114,11 @@ const Home = () => {
             <FloatingCard delay={200}>
               <GradientButton
                 variant="outline"
-                onClick={() => navigate("/history")}
+                className="text-sm"
+                onClick={() => navigate("/auth")}
               >
-                <History className="w-4 h-4" /> HISTORY
-              </GradientButton>
-            </FloatingCard>
-            <FloatingCard delay={400}>
-              <GradientButton
-                variant="secondary"
-                onClick={() => {
-                  localStorage.removeItem("token");
-                  navigate("/auth");
-                }}
-              >
-                <Lock className="w-4 h-4" /> LOGOUT
+                <Lock className="w-4 h-4" />
+                LOGIN
               </GradientButton>
             </FloatingCard>
           </div>
@@ -167,4 +158,4 @@ const Home = () => {
   );
 };
 
-export default withAuth(Home);
+export default Home;

@@ -70,6 +70,8 @@
   overflow: hidden;
 }
 
+/* Participants list removed */
+
 .meetVideoContainer::before {
   content: "";
   position: absolute;
@@ -273,6 +275,15 @@
   backdrop-filter: blur(10px);
 }
 
+/* Black overlay for leaving peers */
+.leavingOverlay {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0.9;
+  z-index: 2;
+}
+
 .conferenceView > div:hover {
   transform: translateY(-6px);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(102, 126, 234, 0.3),
@@ -290,6 +301,42 @@
     rgba(0, 0, 0, 0.2),
     rgba(30, 30, 60, 0.3)
   );
+}
+
+/* Username label for videos */
+.nameLabel {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  z-index: 2;
+}
+
+/* Local video wrapper to position name label */
+.localVideoWrapper {
+  position: absolute;
+  bottom: 10vh;
+  left: 20px;
+  height: 20vh;
+  width: auto;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 3px solid #4caf50;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  z-index: 5;
+}
+
+.localVideoWrapper video {
+  height: 100%;
+  border-radius: 0;
 }
 
 /* Video placeholder for when no stream */

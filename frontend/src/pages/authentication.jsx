@@ -24,6 +24,7 @@ export default function authentication() {
   const [formState, setFormState] = React.useState(0);
 
   const [open, setOpen] = React.useState(false);
+  const [email, setEmail] = React.useState();
 
   const { handleRegister, handleLogin } = React.useContext(AuthContext);
   let handleAuth = async () => {
@@ -32,7 +33,7 @@ export default function authentication() {
         let result = await handleLogin(username, password);
       }
       if (formState === 1) {
-        let result = await handleRegister(Name, username, password);
+        let result = await handleRegister(Name, username, email, password);
         console.log(result);
         setMessages(result);
         setOpen(true);
@@ -103,19 +104,33 @@ export default function authentication() {
 
             <Box component="form" noValidate sx={{ mt: 1 }}>
               {formState === 1 ? (
-                <TextField
-                  margin="normal"
-                  required
-                  fullWidth
-                  id="username"
-                  label="Full Name"
-                  name="username"
-                  value={Name}
-                  autoFocus
-                  onChange={(e) => {
-                    setName(e.target.value);
-                  }}
-                />
+                <>
+                  {/* <TextField
+                    margin="normal"
+                    required
+                    fullWidth
+                    id="username"
+                    label="Full Name"
+                    name="username"
+                    value={Name}
+                    autoFocus
+                    onChange={(e) => {
+                      setName(e.target.value);
+                    }}
+                  /> */}
+                  <TextField
+                    margin="normal"
+                    required
+                    fullWidth
+                    id="email"
+                    label="Email Address"
+                    name="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                    }}
+                  />
+                </>
               ) : (
                 <></>
               )}

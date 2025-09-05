@@ -306,7 +306,11 @@ const SyncUpLanding = () => {
               <div className="flex flex-col sm:flex-row gap-4">
                 <GradientButton
                   className="w-full sm:w-auto"
-                  onClick={() => navigate(`/${generateFormattedMeetingCode()}`)}
+                  onClick={() => {
+                    isLoggedIn
+                      ? navigate(`/${generateFormattedMeetingCode()}`)
+                      : navigate(`/auth`);
+                  }}
                 >
                   <Play className="w-5 h-5" />
                   START FREE MEETING
@@ -316,7 +320,7 @@ const SyncUpLanding = () => {
                 <GradientButton
                   variant="secondary"
                   className="w-full sm:w-auto"
-                  onClick={() => navigate("/home")}
+                  onClick={() => navigate(`/home`)}
                 >
                   <Globe className="w-5 h-5" />
                   JOIN MEETING
