@@ -137,95 +137,32 @@ export default function VideoMeetComponent() {
     connectToSocketServer();
   };
 
-  let getUserMediaSuccess = (stream) => {
-    try {
-      if (window.localStream) {
-        window.localStream.getTracks().forEach((track) => track.stop());
-      }
-    } catch (e) {
-      console.log("Error stopping existing tracks:", e);
+  let getUserMediaSuccess = async (stream) => {
+    // Simplified renegotiation - only for existing connections
+for (let id in connections) {
+  if (id === socketIdRef.current) continue;
+  const pc = connections[id];
+  if (!pc) continue;
+  
+  try {
+    // Simple track replacement without complex checking
+    const senders = pc.getSenders();
+    const videoSender = senders.find(s => s.track && s.track.kind === "video");
+    const audioSender = senders.find(s => s.track && s.track.kind === "audio");
+    
+    const videoTrack = window.localStream.getVideoTracks()[0];
+    const audioTrack = window.localStream.getAudioTracks()[0];
+    
+    if (videoSender && videoTrack) {
+      await videoSender.replaceTrack(videoTrack);
     }
-
-    window.localStream = stream;
-    if (localVideoref.current) {
-      localVideoref.current.srcObject = stream;
+    if (audioSender && audioTrack) {
+      await audioSender.replaceTrack(audioTrack);
     }
-
-    for (let id in connections) {
-      if (id === socketIdRef.current) continue;
-      const pc = connections[id];
-      try {
-        const senders = pc.getSenders ? pc.getSenders() : [];
-        const hasVideo = senders.some((s) => s.track && s.track.kind === "video");
-        const hasAudio = senders.some((s) => s.track && s.track.kind === "audio");
-        const vt = window.localStream.getVideoTracks()[0];
-        const at = window.localStream.getAudioTracks()[0];
-        
-        // Add tracks if they don't exist
-        if (!hasVideo && vt) {
-          pc.addTrack(vt, window.localStream);
-          console.log("Added video track to connection:", id);
-        }
-        if (!hasAudio && at) {
-          pc.addTrack(at, window.localStream);
-          console.log("Added audio track to connection:", id);
-        }
-      } catch (e) {
-        console.log("Error adding tracks to connection:", id, e);
-      }
-
-      // Always renegotiate to ensure proper track updates
-      pc.createOffer().then((description) => {
-        pc
-          .setLocalDescription(description)
-          .then(() => {
-            socketRef.current.emit(
-              "signal",
-              id,
-              JSON.stringify({ sdp: pc.localDescription })
-            );
-            console.log("Renegotiated connection:", id);
-          })
-          .catch((e) => console.log("Error renegotiating connection:", id, e));
-      }).catch((e) => console.log("Error creating offer for connection:", id, e));
-    }
-
-    stream.getTracks().forEach(
-      (track) =>
-        (track.onended = () => {
-          setVideo(false);
-          setAudio(false);
-
-          try {
-            let tracks = localVideoref.current.srcObject.getTracks();
-            tracks.forEach((track) => track.stop());
-          } catch (e) {
-            console.log(e);
-          }
-
-          let blackSilence = (...args) =>
-            new MediaStream([black(...args), silence()]);
-          window.localStream = blackSilence();
-          localVideoref.current.srcObject = window.localStream;
-
-          for (let id in connections) {
-            connections[id].addStream(window.localStream);
-
-            connections[id].createOffer().then((description) => {
-              connections[id]
-                .setLocalDescription(description)
-                .then(() => {
-                  socketRef.current.emit(
-                    "signal",
-                    id,
-                    JSON.stringify({ sdp: connections[id].localDescription })
-                  );
-                })
-                .catch((e) => console.log(e));
-            });
-          }
-        })
-    );
+  } catch (e) {
+    console.log("Error updating tracks for connection:", id, e);
+  }
+}
   };
 
   let getUserMedia = () => {
@@ -600,12 +537,13 @@ export default function VideoMeetComponent() {
   };
 
   let silence = () => {
-    let ctx = new AudioContext();
-    let oscillator = ctx.createOscillator();
-    let dst = oscillator.connect(ctx.createMediaStreamDestination());
-    oscillator.start();
-    ctx.resume();
-    return Object.assign(dst.stream.getAudioTracks()[0], { enabled: false });
+    const canvas = document.createElement('canvas');
+  const stream = canvas.captureStream();
+  const audioContext = new AudioContext();
+  const destination = audioContext.createMediaStreamDestination();
+  const track = destination.stream.getAudioTracks()[0];
+  track.enabled = false;
+  return track;
   };
   let black = ({ width = 640, height = 480 } = {}) => {
     let canvas = Object.assign(document.createElement("canvas"), {
@@ -623,11 +561,11 @@ export default function VideoMeetComponent() {
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#000";
+    ctx.fillStyle = "#000000";
     ctx.fillRect(0, 0, width, height);
-    const stream = canvas.captureStream(10);
+    const stream = canvas.captureStream(1); // 1 FPS is sufficient for black video
     const track = stream.getVideoTracks()[0];
-    track.enabled = true; // ensure black frames are sent
+    track.enabled = true; // Ensure it's enabled
     return track;
   };
 
@@ -720,191 +658,122 @@ export default function VideoMeetComponent() {
   };
 
   let handleVideo = async () => {
-    const turningOff = video === true;
-    setVideo(!video);
-
+    const newVideoState = !video;
+    setVideo(newVideoState);
+  
     try {
-      if (turningOff) {
-        // Replace outgoing video track with an enabled black track so remotes see black instantly
+      if (!newVideoState) {
+        // Turning video OFF - replace with black track
+        console.log("Turning video off...");
+        
+        // Stop current video tracks
+        if (window.localStream) {
+          window.localStream.getVideoTracks().forEach(track => {
+            track.stop();
+            console.log("Stopped video track:", track.id);
+          });
+        }
+  
+        // Create black track
         const blackTrack = createBlackVideoTrack();
-
+        
         // Update local stream
-        try {
-          const currentStream = localVideoref.current?.srcObject;
-          if (currentStream) {
-            currentStream.getVideoTracks().forEach((t) => t.stop());
-          }
-        } catch (e) {
-          console.log("Error stopping video tracks:", e);
-        }
-
         const audioTracks = window.localStream ? window.localStream.getAudioTracks() : [];
-        const newLocalStream = new MediaStream([blackTrack, ...audioTracks]);
-        console.log("Preserving audio tracks when turning video off:", audioTracks.length);
-        window.localStream = newLocalStream;
+        window.localStream = new MediaStream([blackTrack, ...audioTracks]);
+        
         if (localVideoref.current) {
-          localVideoref.current.srcObject = newLocalStream;
+          localVideoref.current.srcObject = window.localStream;
         }
-
-        // Replace on all senders; fallback to re-addStream + renegotiate
+  
+        // Update all peer connections
         for (let id in connections) {
           const pc = connections[id];
           if (!pc) continue;
-          
-          // Try to replace the video track with black track
-          const trackReplaced = await replaceVideoTrackForConnection(pc, blackTrack, id);
-          
-          if (!trackReplaced) {
-            console.log("Track replacement failed for video off, using fallback for:", id);
-            try {
-              if (pc.getLocalStreams) {
-                pc.getLocalStreams().forEach((s) => pc.removeStream(s));
-              }
-            } catch (e) {
-              console.log("Error removing streams:", e);
+  
+          try {
+            const senders = pc.getSenders();
+            const videoSender = senders.find(s => s.track && s.track.kind === "video");
+            
+            if (videoSender) {
+              await videoSender.replaceTrack(blackTrack);
+              console.log(`Replaced video with black track for: ${id}`);
             }
-            try {
-              pc.addStream(window.localStream);
-            } catch (e) {
-              console.log("Error adding stream:", e);
-            }
-            try {
-              const description = await pc.createOffer();
-              await pc.setLocalDescription(description);
-              socketRef.current.emit(
-                "signal",
-                id,
-                JSON.stringify({ sdp: pc.localDescription })
-              );
-            } catch (e) {
-              console.log("Error renegotiating video off:", e);
-            }
+          } catch (e) {
+            console.log(`Error replacing video track for ${id}:`, e);
           }
         }
+  
       } else {
-        // Turning on: reacquire camera video track and replace
-        console.log("Turning video back on...");
+        // Turning video ON - get camera stream
+        console.log("Turning video on...");
         
         try {
-          // First, stop any existing video tracks to free up the camera
-          if (window.localStream) {
-            window.localStream.getVideoTracks().forEach((track) => {
-              track.stop();
-              console.log("Stopped existing video track:", track.id);
-            });
-          }
-          
-          // Get new camera stream
-          const media = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
+          // Get fresh camera stream
+          const videoStream = await navigator.mediaDevices.getUserMedia({ 
+            video: {
               width: { ideal: 1280 },
               height: { ideal: 720 },
               frameRate: { ideal: 30 }
-            }, 
-            audio: false 
+            }
           });
           
-          const cameraTrack = media.getVideoTracks()[0];
-          console.log("Got new camera track:", cameraTrack);
-          console.log("Camera track enabled:", cameraTrack.enabled);
-          console.log("Camera track readyState:", cameraTrack.readyState);
-
-          // Create new local stream with the camera track and existing audio
-          const audioTracks = window.localStream ? window.localStream.getAudioTracks() : [];
-          const newLocalStream = new MediaStream([cameraTrack, ...audioTracks]);
-          console.log("Preserving audio tracks:", audioTracks.length);
-          
-          // Update global stream reference
-          window.localStream = newLocalStream;
-          
-          // Update local video element immediately
-          if (localVideoref.current) {
-            localVideoref.current.srcObject = newLocalStream;
-            console.log("Updated local video element with new stream");
-            
-            // Force video element to reload
-            localVideoref.current.load();
-            
-            // Ensure video plays
-            localVideoref.current.play().catch(e => {
-              console.log("Video play error (this is usually fine):", e);
-            });
+          const cameraTrack = videoStream.getVideoTracks()[0];
+          if (!cameraTrack) {
+            throw new Error("No camera track available");
           }
-
-          // Small delay to ensure local video element is updated
-          await new Promise(resolve => setTimeout(resolve, 100));
+  
+          console.log("Got camera track:", cameraTrack.id);
+  
+          // Update local stream
+          const audioTracks = window.localStream ? window.localStream.getAudioTracks() : [];
           
-          // Replace video tracks on all peer connections with delays to prevent race conditions
+          // Stop old video tracks
+          if (window.localStream) {
+            window.localStream.getVideoTracks().forEach(track => track.stop());
+          }
+          
+          window.localStream = new MediaStream([cameraTrack, ...audioTracks]);
+          
+          if (localVideoref.current) {
+            localVideoref.current.srcObject = window.localStream;
+          }
+  
+          // Update all peer connections with delay between each
           const connectionIds = Object.keys(connections);
           for (let i = 0; i < connectionIds.length; i++) {
             const id = connectionIds[i];
             const pc = connections[id];
             if (!pc) continue;
-            
-            console.log(`Updating video for connection: ${id} (${i + 1}/${connectionIds.length})`);
-            
+  
             try {
-              // Try to replace the video track
-              const trackReplaced = await replaceVideoTrackForConnection(pc, cameraTrack, id);
+              const senders = pc.getSenders();
+              const videoSender = senders.find(s => s.track && s.track.kind === "video");
               
-              if (!trackReplaced) {
-                console.log("Track replacement failed, using fallback method for:", id);
-                // Fallback: remove all streams and re-add
-                try {
-                  if (pc.getLocalStreams) {
-                    pc.getLocalStreams().forEach((s) => pc.removeStream(s));
-                  }
-                } catch (e) {
-                  console.log("Error removing streams:", e);
-                }
-                
-                try {
-                  pc.addStream(newLocalStream);
-                  console.log("Re-added stream for:", id);
-                } catch (e) {
-                  console.log("Error adding stream:", e);
-                }
-                
-                try {
-                  if (pc.signalingState === "stable") {
-                    const description = await pc.createOffer();
-                    await pc.setLocalDescription(description);
-                    socketRef.current.emit(
-                      "signal",
-                      id,
-                      JSON.stringify({ sdp: pc.localDescription })
-                    );
-                    console.log("Renegotiated with fallback method for:", id);
-                  } else {
-                    console.log("Skipping fallback renegotiation for:", id, "state:", pc.signalingState);
-                  }
-                } catch (e) {
-                  console.log("Error renegotiating with fallback:", e);
-                }
+              if (videoSender) {
+                await videoSender.replaceTrack(cameraTrack);
+                console.log(`Replaced black track with camera for: ${id}`);
               }
               
-              // Add small delay between connections to prevent race conditions
+              // Small delay between connections
               if (i < connectionIds.length - 1) {
-                await new Promise(resolve => setTimeout(resolve, 50));
+                await new Promise(resolve => setTimeout(resolve, 100));
               }
             } catch (e) {
-              console.log("Error updating video for connection:", id, e);
+              console.log(`Error replacing track for ${id}:`, e);
             }
           }
-          
-          console.log("Video turn-on process completed successfully");
-          
+  
         } catch (error) {
-          console.error("Error turning video back on:", error);
-          // Revert the video state if there was an error
-          setVideo(false);
-          throw error;
+          console.error("Failed to get camera stream:", error);
+          setVideo(false); // Revert state on failure
+          alert("Could not access camera. Please check permissions.");
+          return;
         }
       }
+  
     } catch (e) {
-      console.log("Error in handleVideo:", e);
-      // Revert the video state if there was an error
-      setVideo(turningOff);
+      console.error("Error in handleVideo:", e);
+      setVideo(!newVideoState); // Revert state on error
     }
   };
   let handleAudio = async () => {
