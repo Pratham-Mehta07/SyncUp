@@ -1,5 +1,6 @@
 import express from "express";
 import { createServer } from "node:http";
+import "dotenv/config";
 
 import { Server } from "socket.io";
 
@@ -21,13 +22,19 @@ app.use(express.urlencoded({ limit: "40kb", extended: true }));
 app.use("/api/v1/user", userRoutes);
 
 const start = async () => {
-  const connectionDb = await mongoose.connect(
-    "mongodb+srv://mehtapratham2005:Mehta1207@cluster0.7m187gd.mongodb.net/"
-  );
-  console.log("MONGO Connected DB Host" + connectionDb.connection.host);
-  server.listen(app.get("port"), () => {
-    console.log("Listening on 8000");
-  });
+  if (!process.env.DB_URL) {
+    console.error("Environment variable DB_URL is not set. Set it in .env");
+    process.exit(1);
+  }
+  try {
+    const connectionDb = await mongoose.connect(process.env.DB_URL);
+    server.listen(app.get("port"), () => {
+      console.log("Listening on " + app.get("port"));
+    });
+  } catch (err) {
+    console.error("Failed to connect to MongoDB:", err.message || err);
+    process.exit(1);
+  }
 };
 
 app.listen(8000, "0.0.0.0", () => {
