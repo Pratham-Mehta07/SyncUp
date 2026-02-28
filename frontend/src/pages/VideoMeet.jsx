@@ -79,9 +79,14 @@ export default function VideoMeetComponent() {
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => clearInterval(timer);
-  }, []);
+    let timer;
+    if (askForUsername) {
+      timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [askForUsername]);
 
   // TODO
   // if(isChrome() === false) {
@@ -1234,7 +1239,7 @@ for (let id in connections) {
                 <video
                   data-socket={video.socketId}
                   ref={(ref) => {
-                    if (ref && video.stream) {
+                    if (ref && video.stream && ref.srcObject !== video.stream) {
                       ref.srcObject = video.stream;
                     }
                   }}
