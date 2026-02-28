@@ -573,10 +573,14 @@
   }
 
   .conferenceView {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     height: calc(100vh - 120px);
     padding: 15px;
     gap: 15px;
+  }
+
+  .conferenceView video {
+    min-height: 150px;
   }
 
   .chatRoom {

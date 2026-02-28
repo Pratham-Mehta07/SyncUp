@@ -5,6 +5,27 @@ let messages = {};
 let timeOnline = {};
 // Map of socket.id -> username
 let usernames = {};
+// Map of roomKey -> Host socket.id
+let roomHosts = {};
+// Map of roomKey -> Array of waiting user data { socketId, username }
+let waitingRoom = {};
+
+// Helper function to build and send the participants list
+const broadcastParticipantsList = (roomKey, io) => {
+  const roomUsers = connections[roomKey];
+  if (roomUsers) {
+    const payload = roomUsers.map((sid) => ({
+      socketId: sid,
+      username: usernames[sid] || `User-${sid.substring(0, 5)}`,
+      role: roomHosts[roomKey] === sid ? "Host" : "Member"
+    }));
+    
+    // Send to all users in the room
+    roomUsers.forEach((sid) => {
+      io.to(sid).emit("participants-update", payload);
+    });
+  }
+};
 
 const connectToSocket = (server) => {
   const io = new Server(server, {
@@ -23,11 +44,25 @@ const connectToSocket = (server) => {
         // Identify all rooms this socket is in and notify peers
         for (const [roomKey, roomUsers] of Object.entries(connections)) {
           if (roomUsers.includes(socket.id)) {
-            roomUsers.forEach((socketId) => {
-              if (socketId !== socket.id) {
-                io.to(socketId).emit("user-left", socket.id);
-              }
-            });
+            // If the host is leaving, end the meeting
+            if (roomHosts[roomKey] === socket.id) {
+              roomUsers.forEach((socketId) => {
+                if (socketId !== socket.id) {
+                  io.to(socketId).emit("meeting-ended");
+                }
+              });
+              const waitingUsers = waitingRoom[roomKey] || [];
+              waitingUsers.forEach((user) => {
+                io.to(user.socketId).emit("meeting-ended");
+              });
+            } else {
+              // Otherwise just notify the user left
+              roomUsers.forEach((socketId) => {
+                if (socketId !== socket.id) {
+                  io.to(socketId).emit("user-left", socket.id);
+                }
+              });
+            }
           }
         }
       } catch (e) {
@@ -49,18 +84,51 @@ const connectToSocket = (server) => {
     socket.on("join-call", (path, username) => {
       console.log("User joined call:", socket.id, "Room:", path);
 
-      // Initialize room if it doesn't exist
+      // Initialize room Host if it doesn't exist (i.e., first user joining)
       if (connections[path] === undefined) {
         connections[path] = [];
+        roomHosts[path] = socket.id;
       }
 
-      // Add user to room
-      connections[path].push(socket.id);
-      timeOnline[socket.id] = new Date();
-      if (typeof username === "string" && username.trim().length > 0) {
-        usernames[socket.id] = username.trim();
+      const assignedUsername =
+        typeof username === "string" && username.trim().length > 0
+          ? username.trim()
+          : `User-${socket.id.substring(0, 5)}`;
+
+      usernames[socket.id] = assignedUsername;
+
+      // Check if user is the Host
+      if (roomHosts[path] === socket.id) {
+        // Add Host directly to the room
+        connections[path].push(socket.id);
+        timeOnline[socket.id] = new Date();
+        socket.emit("role", "Host");
+
+        console.log("Host joined Room", path, "now has users:", connections[path]);
       } else {
-        usernames[socket.id] = `User-${socket.id.substring(0, 5)}`;
+        // Handle members (Guests)
+        // Check if waiting room exists for this path
+        if (waitingRoom[path] === undefined) {
+          waitingRoom[path] = [];
+        }
+
+        // Add to waiting room
+        waitingRoom[path].push({
+          socketId: socket.id,
+          username: assignedUsername,
+        });
+
+        // Notify member they are waiting
+        socket.emit("waiting-for-host");
+
+        // Notify host that someone is waiting
+        io.to(roomHosts[path]).emit("guest-waiting", {
+          socketId: socket.id,
+          username: assignedUsername,
+        });
+
+        console.log("Guest placed in waiting room", path, ":", assignedUsername);
+        return; // Don't proceed to connect them yet
       }
 
       console.log("Room", path, "now has users:", connections[path]);
@@ -75,6 +143,9 @@ const connectToSocket = (server) => {
       connections[path].forEach((socketId) => {
         io.to(socketId).emit("user-joined", socket.id, connections[path], roomUsernames);
       });
+
+      // Broadcast updated participant list
+      broadcastParticipantsList(path, io);
 
       // Send existing chat messages to the new user
       if (messages[path] !== undefined && messages[path].length > 0) {
@@ -93,6 +164,88 @@ const connectToSocket = (server) => {
           );
         });
       }
+    });
+
+    // Event when Host admits or denies a given waiting guest
+    socket.on("admit-guest", (path, guestSocketId, admitted) => {
+      // Security check to ensure sender is the Host
+      if (roomHosts[path] !== socket.id) {
+        console.warn("Non-host attempted to admit a guest");
+        return;
+      }
+
+      // Check if user is in waiting room
+      const waitingUsers = waitingRoom[path] || [];
+      const userIndex = waitingUsers.findIndex(
+        (u) => u.socketId === guestSocketId
+      );
+
+      if (userIndex !== -1) {
+        // Remove from waiting room
+        waitingRoom[path].splice(userIndex, 1);
+
+        if (admitted) {
+          // Add guest to active connections
+          connections[path].push(guestSocketId);
+          timeOnline[guestSocketId] = new Date();
+
+          // Build usernames map for this room only
+          const roomUsernames = {};
+          connections[path].forEach((sid) => {
+            roomUsernames[sid] = usernames[sid] || `User-${sid.substring(0, 5)}`;
+          });
+
+          // Notify guest they are admitted
+          io.to(guestSocketId).emit("role", "Member");
+
+          // Notify all existing users in the room about the new guest, incl. Host
+          connections[path].forEach((existingSocketId) => {
+            io.to(existingSocketId).emit(
+              "user-joined",
+              guestSocketId,
+              connections[path],
+              roomUsernames
+            );
+          });
+
+          // Broadcast updated participant list
+          broadcastParticipantsList(path, io);
+
+          // Send existing chat messages to the newly admitted guest
+          if (messages[path] !== undefined && messages[path].length > 0) {
+            messages[path].forEach((message) => {
+              io.to(guestSocketId).emit(
+                "chat-message",
+                message.data,
+                message.sender,
+                message["socket-id-sender"]
+              );
+            });
+          }
+        } else {
+          // Notify guest they were denied
+          io.to(guestSocketId).emit("join-denied");
+        }
+      }
+    });
+
+    // Listen for client requests to get the latest participants map
+    socket.on("request-participants", (path) => {
+      const roomUsers = connections[path];
+      if (roomUsers && roomUsers.includes(socket.id)) {
+        const payload = roomUsers.map((sid) => ({
+          socketId: sid,
+          username: usernames[sid] || `User-${sid.substring(0, 5)}`,
+          role: roomHosts[path] === sid ? "Host" : "Member"
+        }));
+        socket.emit("participants-update", payload);
+      }
+    });
+
+    // Check if room exists before joining
+    socket.on("check-room", (path) => {
+      const exists = connections[path] !== undefined;
+      socket.emit("room-status", { exists });
     });
 
     // Fixed signal handler - properly forward WebRTC signaling
@@ -178,28 +331,51 @@ const connectToSocket = (server) => {
         if (userIndex !== -1) {
           console.log("Removing user from room:", roomKey);
 
-          // Notify other users in the room that this user left
-          roomUsers.forEach((socketId) => {
-            if (socketId !== socket.id) {
-              io.to(socketId).emit("user-left", socket.id);
-            }
-          });
+          // Clean up user data immediately for the leaving person
+          delete timeOnline[socket.id];
+          delete usernames[socket.id];
 
-          // Remove user from room
-          connections[roomKey].splice(userIndex, 1);
+          // If Host leaves, end the meeting completely
+          if (roomHosts[roomKey] === socket.id) {
+            console.log("Host left room", roomKey, "Ending meeting.");
+            // Tell everyone else to leave
+            roomUsers.forEach((socketId) => {
+              io.to(socketId).emit("meeting-ended");
+            });
 
-          // Clean up empty rooms
-          if (connections[roomKey].length === 0) {
-            console.log("Room", roomKey, "is now empty, cleaning up");
+            // Also clear waiting room
+            const waitingUsers = waitingRoom[roomKey] || [];
+            waitingUsers.forEach((user) => {
+              io.to(user.socketId).emit("meeting-ended");
+            });
+
+            // Cleanup server state
             delete connections[roomKey];
             delete messages[roomKey];
+            delete roomHosts[roomKey];
+            delete waitingRoom[roomKey];
+          } else {
+            // It's a member leaving, just remove them and notify others
+            console.log("Removing user from room:", roomKey);
+
+            connections[roomKey].splice(userIndex, 1);
           }
 
           break; // User should only be in one room
         }
       }
 
-      // Clean up user data
+      // Check waiting rooms specifically if a user closed tab while waiting
+      for (const [roomKey, waitingUsers] of Object.entries(waitingRoom)) {
+        const index = waitingUsers.findIndex((u) => u.socketId === socket.id);
+        if (index !== -1) {
+          waitingRoom[roomKey].splice(index, 1);
+          delete usernames[socket.id];
+          break;
+        }
+      }
+
+      // Fallback cleanup user data if not caught in loop
       delete timeOnline[socket.id];
       delete usernames[socket.id];
     });

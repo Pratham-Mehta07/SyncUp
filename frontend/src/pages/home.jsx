@@ -2,9 +2,8 @@ import React, { useState, useContext, useEffect } from "react";
 import withAuth from "../utils/withAuth";
 import { useNavigate } from "react-router-dom";
 import { IconButton, TextField } from "@mui/material";
-import RestoreIcon from "@mui/icons-material/Restore";
 import { AuthContext } from "../context/AuthContext";
-import { Video, Lock, History, ArrowRight } from "lucide-react";
+import { Video, Lock, ArrowRight } from "lucide-react";
 
 // Floating animation wrapper
 const FloatingCard = ({ children, delay = 0, className = "" }) => {
@@ -76,10 +75,7 @@ const BackgroundEffects = () => (
 const Home = () => {
   const navigate = useNavigate();
   const [meetingCode, setMeetingCode] = useState("");
-  const { addToUserHistory } = useContext(AuthContext);
-
   const handleJoinVideoCall = async () => {
-    await addToUserHistory(meetingCode);
     navigate(`/${meetingCode}`);
   };
 
@@ -89,11 +85,10 @@ const Home = () => {
 
       {/* Navbar */}
       <nav className="relative z-50 backdrop-blur-xl bg-black/20 border-b border-green-500/10">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
           <FloatingCard>
-            <div className="flex items-center space-x-4">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center mt-2">
-                {/* <Video className="w-6 h-6 text-white" /> */}
+            <div className="flex items-center space-x-2 sm:space-x-4">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center mt-2">
                 <img
                   src="/Logo.png"
                   alt="SyncUp Logo"
@@ -102,7 +97,7 @@ const Home = () => {
               </div>
 
               <h1
-                className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-500 
+                className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-500 
                                bg-clip-text text-transparent"
               >
                 SyncUp
@@ -126,9 +121,9 @@ const Home = () => {
       </nav>
 
       {/* Content */}
-      <div className="relative z-10 max-w-4xl mx-auto px-6 pt-20">
+      <div className="relative z-10 max-w-4xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20">
         <FloatingCard delay={600}>
-          <h2 className="text-4xl font-bold mb-8 text-center">
+          <h2 className="text-3xl sm:text-4xl font-bold mb-8 text-center">
             Join a{" "}
             <span className="bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">
               Meeting
@@ -136,19 +131,19 @@ const Home = () => {
           </h2>
         </FloatingCard>
 
-        <FloatingCard delay={800}>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <FloatingCard delay={800} className="w-full max-w-md mx-auto">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full">
             <TextField
               variant="outlined"
               placeholder="Enter Meeting Code"
               value={meetingCode}
               onChange={(e) => setMeetingCode(e.target.value)}
-              className="bg-white/5 rounded-lg"
+              className="bg-white/5 rounded-lg w-full sm:w-auto flex-1"
               InputProps={{
                 style: { color: "white" },
               }}
             />
-            <GradientButton onClick={handleJoinVideoCall}>
+            <GradientButton onClick={handleJoinVideoCall} className="w-full sm:w-auto">
               JOIN <ArrowRight className="w-4 h-4" />
             </GradientButton>
           </div>

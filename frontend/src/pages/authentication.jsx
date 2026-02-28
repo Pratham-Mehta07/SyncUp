@@ -273,7 +273,7 @@ export default function Authentication() {
 
               {/* Action Button */}
               <div className="mt-8">
-                <GradientButton onClick={handleAuth}>
+                <GradientButton onClick={handleAuth} className="w-full">
                   {formState === 0 ? "Sign In" : "Create Account"}
                   <ArrowRight className="w-5 h-5 ml-1 group-hover:translate-x-1 transition-transform" />
                 </GradientButton>

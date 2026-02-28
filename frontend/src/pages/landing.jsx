@@ -7,11 +7,10 @@ import {
   Users,
   ArrowRight,
   Play,
+  Globe,
   CheckCircle,
   Sparkles,
-  Globe,
   Lock,
-  History,
 } from "lucide-react";
 
 // Shimmer Loading Component (Inspired by Next.js)
@@ -218,18 +217,18 @@ const SyncUpLanding = () => {
       {/* Navigation */}
       <nav className="relative z-50 backdrop-blur-xl bg-black/20 border-b border-green-500/10">
         <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             {/* Left side (Logo) */}
             <FloatingCard>
-              <div className="flex items-center space-x-4">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center mt-2">
+              <div className="flex items-center space-x-2 sm:space-x-4">
+                <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center mt-2">
                   <img
                     src="/Logo.png"
                     alt="SyncUp Logo"
                     className="w-full h-full rounded-xl object-cover"
                   />
                 </div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">
+                <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">
                   SyncUp
                 </h1>
               </div>
@@ -238,14 +237,6 @@ const SyncUpLanding = () => {
             {/* Right side (Depends on login) */}
             {isLoggedIn ? (
               <div className="flex items-center gap-4">
-                <FloatingCard delay={200}>
-                  <GradientButton
-                    variant="outline"
-                    onClick={() => navigate("/history")}
-                  >
-                    <History className="w-4 h-4" /> HISTORY
-                  </GradientButton>
-                </FloatingCard>
                 <FloatingCard delay={400}>
                   <GradientButton
                     variant="outline"
@@ -277,13 +268,13 @@ const SyncUpLanding = () => {
       </nav>
 
       {/* Hero Section */}
-      <div className="relative z-10 max-w-7xl mx-auto px-6 pt-20 pb-32">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          {/* Left Content */}
-          <div className="space-y-8">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-20 sm:pb-32 text-center lg:text-left">
+        <div className="flex flex-col items-center lg:items-start space-y-12">
+          {/* Top Content */}
+          <div className="space-y-8 flex flex-col items-center lg:items-start w-full">
             <FloatingCard delay={600}>
               <div className="space-y-4">
-                <h2 className="text-6xl lg:text-7xl font-bold leading-tight">
+                <h2 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight">
                   <span className="text-white">Seamless</span>
                   <br />
                   <span className="bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">
@@ -296,45 +287,47 @@ const SyncUpLanding = () => {
             </FloatingCard>
 
             <FloatingCard delay={800}>
-              <p className="text-xl text-gray-300 leading-relaxed max-w-lg">
+              <p className="text-base sm:text-lg lg:text-xl text-gray-300 leading-relaxed max-w-xl text-center lg:text-left px-4 sm:px-0">
                 Crystal clear video, robust features, and enterprise-grade
                 security for teams of all sizes. Experience the future of remote
                 collaboration.
               </p>
             </FloatingCard>
 
-            <FloatingCard delay={1000}>
-              <div className="flex flex-col sm:flex-row gap-4">
+            <FloatingCard delay={1000} className="w-full sm:w-auto px-4 sm:px-0">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <GradientButton
-                  className="w-full sm:w-auto"
+                  className="w-full sm:w-auto justify-center"
                   onClick={() => {
                     isLoggedIn
                       ? navigate(`/${generateFormattedMeetingCode()}`)
                       : navigate(`/auth`);
                   }}
                 >
-                  <Play className="w-5 h-5" />
-                  START FREE MEETING
-                  <ArrowRight className="w-5 h-5" />
+                  <Play className="w-5 h-5 flex-shrink-0" />
+                  <span className="whitespace-nowrap">START FREE MEETING</span>
+                  <ArrowRight className="w-5 h-5 flex-shrink-0" />
                 </GradientButton>
 
                 <GradientButton
                   variant="secondary"
-                  className="w-full sm:w-auto"
+                  className="w-full sm:w-auto justify-center"
                   onClick={() => navigate(`/home`)}
                 >
-                  <Globe className="w-5 h-5" />
-                  JOIN MEETING
+                  <Globe className="w-5 h-5 flex-shrink-0" />
+                  <span className="whitespace-nowrap">JOIN MEETING</span>
                 </GradientButton>
               </div>
             </FloatingCard>
           </div>
 
-          {/* Right Content - Feature Cards */}
-          <div className="space-y-6">
-            {features.map((feature, index) => (
-              <FeatureCard key={index} {...feature} delay={800 + index * 200} />
-            ))}
+          {/* Bottom Content - Feature Cards */}
+          <div className="w-full pt-10 border-t border-green-500/10">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {features.map((feature, index) => (
+                <FeatureCard key={index} {...feature} delay={800 + index * 200} />
+              ))}
+            </div>
           </div>
         </div>
       </div>

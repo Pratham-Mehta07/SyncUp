@@ -11,8 +11,12 @@ import MicOffIcon from "@mui/icons-material/MicOff";
 import ScreenShareIcon from "@mui/icons-material/ScreenShare";
 import StopScreenShareIcon from "@mui/icons-material/StopScreenShare";
 import ChatIcon from "@mui/icons-material/Chat";
+import PeopleIcon from "@mui/icons-material/People";
+import { Clock, Calendar, Video } from "lucide-react";
 import server from "../environment.js";
 import ChatModal from "./Chat.jsx";
+import { AuthContext } from "../context/AuthContext";
+import { useContext } from "react";
 
 const server_url = server;
 
@@ -56,6 +60,29 @@ export default function VideoMeetComponent() {
   const [message, setMessage] = useState("");
   const [showChat, setShowChat] = useState(false);
 
+  // New states for Roles and Lobby
+  const [role, setRole] = useState("");
+  const [isWaiting, setIsWaiting] = useState(false);
+  const [waitingGuests, setWaitingGuests] = useState([]);
+  const [meetingEnded, setMeetingEnded] = useState(false);
+
+  // New states for Participant List
+  const [participants, setParticipants] = useState([]);
+  const [showParticipants, setShowParticipants] = useState(false);
+
+  // New states for Dynamic Lobby
+  const { userData } = useContext(AuthContext);
+  const [isRoomCreator, setIsRoomCreator] = useState(false);
+  const [checkingRoom, setCheckingRoom] = useState(true);
+
+  // Time state for the Lobby
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // TODO
   // if(isChrome() === false) {
 
@@ -63,8 +90,33 @@ export default function VideoMeetComponent() {
 
   useEffect(() => {
     console.log("HELLO");
-    getPermissions();
-  }, []);
+    
+    // Check if room exists before requesting permissions
+    const tempSocket = io.connect(server_url, { secure: false });
+    tempSocket.emit("check-room", window.location.href);
+    
+    tempSocket.on("room-status", ({ exists }) => {
+      console.log("Room exists?", exists);
+      if (!exists) {
+        // Room doesn't exist -> This user is the creator (Host)
+        setIsRoomCreator(true);
+      } else {
+        // Room exists -> This user is joining as a Member
+        setIsRoomCreator(false);
+      }
+      
+      // Inherit name from Session Storage if logged in (for both Hosts and Members)
+      const storedName = sessionStorage.getItem("username");
+      if (storedName) {
+        setUsername(storedName);
+      }
+
+      setCheckingRoom(false);
+      tempSocket.disconnect();
+      getPermissions();
+    });
+    
+  }, [userData]);
 
   let getDislayMedia = () => {
     if (screen) {
@@ -315,6 +367,52 @@ for (let id in connections) {
       socketRef.current.emit("join-call", window.location.href, username);
       socketIdRef.current = socketRef.current.id;
 
+      // Request initial list of participants
+      socketRef.current.emit("request-participants", window.location.href);
+
+      socketRef.current.on("participants-update", (updatedParticipants) => {
+        console.log("Received updated participants list:", updatedParticipants);
+        setParticipants(updatedParticipants);
+      });
+
+      socketRef.current.on("role", (assignedRole) => {
+        console.log(`Assigned role: ${assignedRole}`);
+        setRole(assignedRole);
+        setIsWaiting(false); // If they get a role, they're no longer waiting
+      });
+
+      socketRef.current.on("waiting-for-host", () => {
+        setIsWaiting(true);
+      });
+
+      socketRef.current.on("guest-waiting", (guest) => {
+        // Notification to the Host
+        setWaitingGuests((prev) => {
+          // Check if already in array
+          if (prev.find((g) => g.socketId === guest.socketId)) return prev;
+          return [...prev, guest];
+        });
+      });
+
+      socketRef.current.on("join-denied", () => {
+        alert("The host has denied your request to join the meeting.");
+        window.location.href = "/";
+      });
+
+      socketRef.current.on("meeting-ended", () => {
+        console.log("Meeting ended by Host");
+        setMeetingEnded(true);
+        // Clean up connections if they exist
+        try {
+          for (let id in connections) {
+            connections[id].close();
+          }
+          let tracks = localVideoref.current?.srcObject?.getTracks();
+          tracks?.forEach((track) => track.stop());
+        } catch (e) {
+          console.log(e);
+        }
+      });
 
       socketRef.current.on("user-left", (id) => {
         // Mark tile as leaving (black overlay)
@@ -881,6 +979,14 @@ for (let id in connections) {
     window.location.href = "/";
   };
 
+  const handleAdmitGuest = (socketId, admit) => {
+    if (socketRef.current) {
+      const roomPath = window.location.href;
+      socketRef.current.emit("admit-guest", roomPath, socketId, admit);
+      // Remove from UI list
+      setWaitingGuests((prev) => prev.filter((g) => g.socketId !== socketId));
+    }
+  };
 
   let connect = () => {
     setAskForUsername(false);
@@ -913,43 +1019,168 @@ for (let id in connections) {
 
   return (
     <div>
-      {askForUsername === true ? (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-[#060714] to-[#0F101A] px-4">
-          <h2 className="text-3xl font-bold text-white mb-6">
-            Enter into Lobby
-          </h2>
+      {checkingRoom ? (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-[#060714] to-[#0F101A] px-4 text-center">
+           <h2 className="text-3xl font-bold text-white mb-4 animate-pulse">Checking Meeting Details...</h2>
+        </div>
+      ) : askForUsername === true ? (
+        <div className="flex flex-col lg:flex-row min-h-screen bg-black text-white relative overflow-hidden">
+          {/* Background Effects */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#060714] via-[#0a0a1a] to-[#0F101A] z-0" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-green-900/20 via-[#060714]/0 to-transparent z-0" />
+          
+          {/* Left Side: Video Preview & Time */}
+          <div className="relative z-10 flex-[1.5] w-full p-6 lg:p-12 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-white/5">
+            {/* Header / Logo */}
+            <div className="flex items-center space-x-3 mb-8 lg:mb-0">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-400 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/20">
+                <Video className="w-5 h-5 text-white" />
+              </div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">
+                SyncUp
+              </h1>
+            </div>
 
-          <div className="w-full max-w-sm space-y-4">
-            <input
-              type="text"
-              placeholder="Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-[#1a1b2f] text-white placeholder-gray-400 border border-[#22c55e40] focus:outline-none focus:ring-2 focus:ring-[#22c55e] transition"
-            />
+            {/* Video Box */}
+            <div className="w-full max-w-2xl mx-auto mt-4 lg:mt-0 relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-green-500/30 to-emerald-500/30 rounded-3xl blur opacity-30 group-hover:opacity-60 transition duration-1000"></div>
+              <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-black/50 aspect-video shadow-2xl flex items-center justify-center">
+                
+                {/* Video / Avatar Fallback */}
+                {video ? (
+                  <video
+                    ref={localVideoref}
+                    autoPlay
+                    muted
+                    className="w-full h-full object-cover"
+                  ></video>
+                ) : (
+                  <div className="flex flex-col items-center justify-center space-y-4">
+                    <div className="w-24 h-24 rounded-full bg-gray-800 flex items-center justify-center">
+                      <VideocamOffIcon sx={{ fontSize: 40, color: "gray" }} />
+                    </div>
+                    <p className="text-gray-400">Camera is off</p>
+                  </div>
+                )}
+                
+                {/* Overlay Name */}
+                {username && (
+                  <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-lg border border-white/10 text-sm font-medium z-10">
+                    {username}
+                  </div>
+                )}
 
-            <button
-              onClick={() => {
-                if (username.trim() === "") {
-                  alert("Please enter a username");
-                } else {
-                  connect();
-                }
-              }}
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-[#22c55e] to-[#15803d] text-white font-semibold shadow-lg hover:scale-105 hover:shadow-xl transition"
-            >
-              Start Meeting
-            </button>
+                {/* Pre-join AV Controls */}
+                <div className="absolute bottom-4 right-4 flex space-x-3 z-10">
+                  <div className="bg-black/60 backdrop-blur-md rounded-full border border-white/10">
+                    <IconButton onClick={handleAudio} size="small" style={{ color: audio ? "white" : "#ef4444", padding: "8px" }}>
+                      {audio ? <MicIcon fontSize="small" /> : <MicOffIcon fontSize="small" />}
+                    </IconButton>
+                  </div>
+                  <div className="bg-black/60 backdrop-blur-md rounded-full border border-white/10">
+                    <IconButton onClick={handleVideo} size="small" style={{ color: video ? "white" : "#ef4444", padding: "8px" }}>
+                      {video ? <VideocamIcon fontSize="small" /> : <VideocamOffIcon fontSize="small" />}
+                    </IconButton>
+                  </div>
+                </div>
 
-            <div className="mt-6 rounded-xl overflow-hidden border border-[#22c55e30] shadow-md">
-              <video
-                ref={localVideoref}
-                autoPlay
-                muted
-                className="w-full h-auto rounded-xl"
-              ></video>
+              </div>
+            </div>
+
+            {/* Date & Time display */}
+            <div className="hidden lg:flex flex-col space-y-2 mt-8">
+              <div className="text-6xl font-light tracking-tight text-white/90">
+                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <div className="text-xl text-gray-400 font-medium">
+                {currentTime.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+              </div>
             </div>
           </div>
+
+          {/* Right Side: Meeting Details & Join Controls */}
+          <div className="relative z-10 flex-1 w-full bg-black/40 backdrop-blur-3xl p-6 lg:p-12 flex flex-col justify-center items-center">
+            
+            {/* Mobile Date & Time (Only shows on small screens) */}
+            <div className="flex lg:hidden flex-col items-center space-y-1 mb-10 w-full">
+              <div className="text-5xl font-light tracking-tight text-white/90">
+                {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <div className="text-lg text-gray-400 font-medium">
+                {currentTime.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+              </div>
+            </div>
+
+            <div className="w-full max-w-sm space-y-8">
+              <div className="text-center space-y-3">
+                <h2 className="text-3xl font-bold text-white">
+                  Ready to join?
+                </h2>
+                <p className="text-gray-400">
+                  {isRoomCreator 
+                    ? "You are about to start a new meeting." 
+                    : "You are joining an existing meeting."}
+                </p>
+              </div>
+
+              <div className="space-y-4 bg-white/5 p-6 rounded-2xl border border-white/10 backdrop-blur-sm">
+                {!(sessionStorage.getItem("isLoggedIn") === "true" && sessionStorage.getItem("username")) ? (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-300 ml-1">Your Name</label>
+                    <input
+                      type="text"
+                      placeholder="Enter your name"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="w-full px-4 py-3.5 rounded-xl bg-black/50 text-white placeholder-gray-500 border border-white/10 focus:outline-none focus:border-green-500/50 focus:ring-1 focus:ring-green-500/50 transition-all"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-400 ml-1">Joining as</label>
+                    <div className="bg-black/40 border border-green-500/20 rounded-xl px-4 py-3.5 flex items-center justify-between">
+                      <span className="text-white font-medium">{username}</span>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-400 text-xs font-bold rounded-full uppercase tracking-wider">
+                        {isRoomCreator ? "Host" : "Member"}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => {
+                    if (username.trim() === "") {
+                      alert("Please enter a username");
+                    } else {
+                      connect();
+                    }
+                  }}
+                  className="w-full py-4 rounded-xl bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold shadow-[0_0_20px_rgba(34,197,94,0.3)] hover:shadow-[0_0_30px_rgba(34,197,94,0.5)] hover:scale-[1.02] transition-all duration-300 relative overflow-hidden group"
+                >
+                  <span className="relative z-10 text-lg">
+                    {isRoomCreator ? "Start Meeting" : "Join Meeting"}
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-emerald-600 to-green-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : meetingEnded ? (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-[#0F101A] px-4 text-center">
+          <h2 className="text-4xl font-bold text-red-500 mb-4">Meeting Ended</h2>
+          <p className="text-gray-300 mb-8 text-lg">The host has ended this meeting.</p>
+          <button
+            onClick={() => window.location.href = "/"}
+            className="px-8 py-3 rounded-xl bg-gradient-to-r from-gray-700 to-gray-800 text-white font-semibold shadow-lg hover:scale-105 transition"
+          >
+            Return to Home
+          </button>
+        </div>
+      ) : isWaiting ? (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-[#0F101A] px-4 text-center">
+          <h2 className="text-3xl font-bold text-white mb-4 animate-pulse">Waiting for Host...</h2>
+          <p className="text-gray-400 text-lg">Please wait, the meeting host will let you in soon.</p>
         </div>
       ) : (
         <div className={styles.meetVideoContainer}>
@@ -979,6 +1210,11 @@ for (let id in connections) {
 
             <IconButton onClick={toggleChat} style={{ color: "white" }}>
               <ChatIcon />
+            </IconButton>
+
+            {/* Participants Toggle Button */}
+            <IconButton onClick={() => setShowParticipants(!showParticipants)} style={{ color: "white" }}>
+              <PeopleIcon />
             </IconButton>
 
           </div>
@@ -1028,6 +1264,75 @@ for (let id in connections) {
               socketRef={socketRef}
               socketIdRef={socketIdRef}
             />
+          )}
+
+          {/* Participants Sidebar */}
+          {showParticipants && (
+            <div className="absolute top-0 right-0 h-full w-80 bg-[#1a1b2f] border-l border-[#22c55e30] flex flex-col z-40 animate-fade-in shadow-2xl">
+              <div className="flex items-center justify-between p-4 border-b border-[#22c55e30]">
+                <h3 className="text-white font-semibold text-lg flex items-center gap-2">
+                  <PeopleIcon sx={{ color: "#22c55e" }} />
+                  Participants ({participants.length})
+                </h3>
+                <button
+                  onClick={() => setShowParticipants(false)}
+                  className="text-gray-400 hover:text-white transition"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+                {participants.map((p) => (
+                  <div key={p.socketId} className="flex items-center justify-between bg-[#24263a] p-3 rounded-lg border border-[#22c55e15]">
+                    <div className="flex items-center gap-3 w-full">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#22c55e] to-[#15803d] flex items-center justify-center text-white font-bold text-sm">
+                        {p.username.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex flex-col flex-1 truncate">
+                        <span className="text-white text-sm font-medium truncate">
+                          {p.username} {p.socketId === socketIdRef.current ? "(You)" : ""}
+                        </span>
+                        <span className={`text-xs font-semibold ${p.role === "Host" ? "text-[#22c55e]" : "text-gray-400"}`}>
+                          {p.role}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {participants.length === 0 && (
+                  <div className="text-center text-gray-500 mt-4 text-sm">
+                    No participants found.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Host Admission UI */}
+          {role === "Host" && waitingGuests.length > 0 && (
+            <div className="absolute top-4 right-4 z-50 flex flex-col gap-2">
+              {waitingGuests.map((guest) => (
+                <div key={guest.socketId} className="bg-[#1a1b2f] border border-[#22c55e40] p-4 rounded-xl shadow-2xl flex flex-col gap-3 min-w-[250px]">
+                  <p className="text-white text-sm font-medium">
+                    <span className="text-green-400 font-bold">{guest.username}</span> wants to join
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleAdmitGuest(guest.socketId, true)}
+                      className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg font-semibold transition"
+                    >
+                      Admit
+                    </button>
+                    <button
+                      onClick={() => handleAdmitGuest(guest.socketId, false)}
+                      className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs py-2 rounded-lg font-semibold transition"
+                    >
+                      Deny
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

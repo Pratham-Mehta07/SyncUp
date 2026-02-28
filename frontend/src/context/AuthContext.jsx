@@ -45,6 +45,7 @@ export const AuthProvider = ({ children }) => {
       });
       if (request.status === httpstatus.OK) {
         sessionStorage.setItem("token", request.data.token);
+        sessionStorage.setItem("username", username);
         sessionStorage.setItem("isLoggedIn", "true");
         router("/");
       }
@@ -53,38 +54,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const getHistoryOfUser = async () => {
-    try {
-      let request = await client.get("/get_all_activity", {
-        params: {
-          token: sessionStorage.getItem("token"),
-        },
-      });
-      return request.data;
-    } catch {
-      throw new Error("Error fetching user history");
-    }
-  };
-
-  const addToUserHistory = async (meetingCode) => {
-    try {
-      let request = await client.post("/add_to_activity", {
-        token: sessionStorage.getItem("token"),
-        meeting_code: meetingCode,
-      });
-      return request;
-    } catch {
-      throw new Error("Error adding to user history");
-    }
-  };
-
   const data = {
     userData,
     setUserData,
-    getHistoryOfUser,
     handleRegister,
     handleLogin,
-    addToUserHistory,
   };
 
   return <AuthContext.Provider value={data}>{children}</AuthContext.Provider>;
