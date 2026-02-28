@@ -1,7 +1,3 @@
-let IS_PROD = false;
-
-const server = IS_PROD
-  ? "https://syncup-backend-kdyw.onrender.com"
-  : "http://localhost:8000";
+const server = import.meta.env.VITE_API_URL;
 
 export default server;
