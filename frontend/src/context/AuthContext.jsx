@@ -44,8 +44,8 @@ export const AuthProvider = ({ children }) => {
         password: password,
       });
       if (request.status === httpstatus.OK) {
-        localStorage.setItem("token", request.data.token);
-        localStorage.setItem("isLoggedIn", "true");
+        sessionStorage.setItem("token", request.data.token);
+        sessionStorage.setItem("isLoggedIn", "true");
         router("/");
       }
     } catch (err) {
@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }) => {
     try {
       let request = await client.get("/get_all_activity", {
         params: {
-          token: localStorage.getItem("token"),
+          token: sessionStorage.getItem("token"),
         },
       });
       return request.data;
@@ -69,7 +69,7 @@ export const AuthProvider = ({ children }) => {
   const addToUserHistory = async (meetingCode) => {
     try {
       let request = await client.post("/add_to_activity", {
-        token: localStorage.getItem("token"),
+        token: sessionStorage.getItem("token"),
         meeting_code: meetingCode,
       });
       return request;

@@ -5,7 +5,7 @@ const withAuth = (WrappedComponent) => {
   const AuthComponent = (props) => {
     const router = useNavigate();
     const isAuthenticated = () => {
-      if (localStorage.getItem("token")) {
+      if (sessionStorage.getItem("token")) {
         return true;
       }
       return false;

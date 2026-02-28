@@ -1,5 +1,5 @@
 import { User } from "../models/user.model.js";
-import { meeting } from "../models/meeting.model.js";
+import { meeting as Meeting } from "../models/meeting.model.js";
 import httpStatus from "http-status";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
@@ -25,11 +25,14 @@ const login = async (req, res) => {
       user.token = token;
       await user.save();
       return res.status(httpStatus.OK).json({ token: token });
+    } else {
+      return res.status(httpStatus.UNAUTHORIZED).json({ message: "Invalid credentials" });
     }
   } catch (e) {
     return res.status(500).json({ message: `Something went wrong ${e}` });
   }
 };
+
 
 const register = async (req, res) => {
   const { name, username, email, password } = req.body;
@@ -92,7 +95,7 @@ const addToHistory = async (req, res) => {
   const { token, meeting_code } = req.body;
   try {
     const user = await User.findOne({ token: token });
-    const newMeeting = new meeting({
+    const newMeeting = new Meeting({
       user_id: user.username,
       meetingcode: meeting_code,
     });

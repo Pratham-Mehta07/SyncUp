@@ -196,7 +196,7 @@ const SyncUpLanding = () => {
         result += "-";
       }
       result += characters.charAt(
-        Math.floor(Math.random() * characters.length)
+        Math.floor(Math.random() * characters.length),
       );
     }
 
@@ -206,8 +206,8 @@ const SyncUpLanding = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    // Check login state from localStorage (or API)
-    const loggedIn = localStorage.getItem("isLoggedIn") === "true";
+    // Check login state from sessionStorage (or API)
+    const loggedIn = sessionStorage.getItem("isLoggedIn") === "true";
     setIsLoggedIn(loggedIn);
   }, []);
 
@@ -224,7 +224,7 @@ const SyncUpLanding = () => {
               <div className="flex items-center space-x-4">
                 <div className="w-9 h-9 rounded-xl flex items-center justify-center mt-2">
                   <img
-                    src="./src/assets/Logo.png"
+                    src="/Logo.png"
                     alt="SyncUp Logo"
                     className="w-full h-full rounded-xl object-cover"
                   />
@@ -250,7 +250,8 @@ const SyncUpLanding = () => {
                   <GradientButton
                     variant="outline"
                     onClick={() => {
-                      localStorage.removeItem("token");
+                      sessionStorage.removeItem("token");
+                      sessionStorage.removeItem("isLoggedIn");
                       navigate("/");
                       setIsLoggedIn(false);
                     }}

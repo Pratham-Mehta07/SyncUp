@@ -95,7 +95,7 @@ const Home = () => {
               <div className="w-9 h-9 rounded-xl flex items-center justify-center mt-2">
                 {/* <Video className="w-6 h-6 text-white" /> */}
                 <img
-                  src="./src/assets/Logo.png"
+                  src="/Logo.png"
                   alt="SyncUp Logo"
                   className="w-full h-full rounded-xl object-cover"
                 />
