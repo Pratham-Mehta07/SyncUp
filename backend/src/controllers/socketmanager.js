@@ -315,6 +315,25 @@ const connectToSocket = (server) => {
       }
     });
 
+    // Screen share status handler
+    socket.on("screen-share-status", (isSharing) => {
+      // Find which room this socket belongs to
+      for (const [roomKey, roomUsers] of Object.entries(connections)) {
+        if (roomUsers.includes(socket.id)) {
+          // Broadcast to all other users in the room
+          roomUsers.forEach((socketId) => {
+            if (socketId !== socket.id) {
+              io.to(socketId).emit("screen-share-status", {
+                peerId: socket.id,
+                isSharing: isSharing,
+              });
+            }
+          });
+          break;
+        }
+      }
+    });
+
     // Fixed disconnect handler
     socket.on("disconnect", () => {
       console.log("User disconnected:", socket.id);
