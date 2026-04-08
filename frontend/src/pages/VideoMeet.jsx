@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import io from "socket.io-client";
 import { IconButton } from "@mui/material";
-import { Button } from "@mui/material";
 import VideocamIcon from "@mui/icons-material/Videocam";
 import VideocamOffIcon from "@mui/icons-material/VideocamOff";
 import styles from "../Styles/videoComponent.module.css";
@@ -69,6 +68,9 @@ export default function VideoMeetComponent() {
   // New states for Participant List
   const [participants, setParticipants] = useState([]);
   const [showParticipants, setShowParticipants] = useState(false);
+
+  // Screen sharing presentation mode: tracks who is sharing ('local' or a socketId)
+  const [screenSharer, setScreenSharer] = useState(null);
 
   // New states for Dynamic Lobby
   const { userData } = useContext(AuthContext);
@@ -268,6 +270,12 @@ for (let id in connections) {
 
     stream.getVideoTracks()[0].onended = () => {
       setScreen(false);
+      
+      // Notify peers that screen sharing stopped
+      if (socketRef.current) {
+        socketRef.current.emit("screen-share-status", false);
+      }
+      setScreenSharer(prev => prev === 'local' ? null : prev);
 
       try {
         let tracks = localVideoref.current.srcObject.getTracks();
@@ -449,6 +457,16 @@ for (let id in connections) {
             timestamp: new Date(),
           };
           setMessages(prev => [...prev, messageData]);
+        }
+      });
+
+      // Screen share status listener (from remote peers)
+      socketRef.current.on("screen-share-status", ({ peerId, isSharing }) => {
+        console.log(`Screen share status: ${peerId} is ${isSharing ? 'sharing' : 'not sharing'}`);
+        if (isSharing) {
+          setScreenSharer(peerId);
+        } else {
+          setScreenSharer(prev => prev === peerId ? null : prev);
         }
       });
 
@@ -957,7 +975,20 @@ for (let id in connections) {
     }
   }, [screen]);
   let handleScreen = () => {
-    setScreen(!screen);
+    const newScreenState = !screen;
+    setScreen(newScreenState);
+    
+    // Notify peers about screen share status
+    if (socketRef.current) {
+      socketRef.current.emit("screen-share-status", newScreenState);
+    }
+    
+    // Update local presentation mode
+    if (newScreenState) {
+      setScreenSharer('local');
+    } else {
+      setScreenSharer(prev => prev === 'local' ? null : prev);
+    }
   };
 
   let handleEndCall = () => {
@@ -1004,6 +1035,45 @@ for (let id in connections) {
 
   const toggleChat = () => {
     setShowChat(!showChat);
+  };
+
+  // --- Helper: determine grid class from participant count ---
+  const getGridClass = (count) => {
+    if (count <= 1) return 'grid1';
+    if (count === 2) return 'grid2';
+    if (count === 3) return 'grid3';
+    if (count === 4) return 'grid4';
+    if (count <= 6) return 'grid6';
+    if (count <= 9) return 'grid9';
+    return 'gridMany';
+  };
+
+  // --- Meeting Timer Component ---
+  const MeetingTimer = () => {
+    const [elapsed, setElapsed] = useState(0);
+    const startTime = useRef(Date.now());
+
+    useEffect(() => {
+      const interval = setInterval(() => {
+        setElapsed(Math.floor((Date.now() - startTime.current) / 1000));
+      }, 1000);
+      return () => clearInterval(interval);
+    }, []);
+
+    const formatElapsed = (secs) => {
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const s = secs % 60;
+      if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      return `${m}:${String(s).padStart(2, '0')}`;
+    };
+
+    return (
+      <div className={styles.meetingTimer}>
+        <div className={styles.meetingTimerDot}></div>
+        <span className={styles.meetingTimerText}>{formatElapsed(elapsed)}</span>
+      </div>
+    );
   };
 
   return (
@@ -1174,6 +1244,176 @@ for (let id in connections) {
       ) : (
         <div className={styles.meetVideoContainer}>
 
+          {/* Meeting Timer (top-left) */}
+          <MeetingTimer />
+
+          {/* Main Layout Area */}
+          {screenSharer ? (
+            <div className={`${styles.presentationLayout} ${(showChat || showParticipants) ? styles.withSidePanel : ''}`}>
+              {/* Main Presentation Area */}
+              <div className={styles.presentationMain}>
+                {screenSharer === 'local' ? (
+                  <div className={`${styles.videoTile} ${styles.localTile}`}>
+                    <video
+                      ref={(ref) => {
+                        localVideoref.current = ref;
+                        if (ref && window.localStream && ref.srcObject !== window.localStream) {
+                          ref.srcObject = window.localStream;
+                        }
+                      }}
+                      autoPlay
+                      muted
+                      className={screen ? "" : styles.localVideo}
+                    ></video>
+                    <div className={styles.tileNameLabel}>
+                      <span>{username || "You"} (Presenting)</span>
+                      <span className={styles.micIndicator}>
+                        {audio ? <MicIcon style={{ fontSize: 14, color: '#e8eaed' }} /> : <MicOffIcon style={{ fontSize: 14, color: '#ea4335' }} />}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  videos.filter(v => v.socketId === screenSharer).map(v => (
+                    <div key={`main-${v.socketId}`} className={styles.videoTile}>
+                      <video
+                        data-socket={v.socketId}
+                        ref={(ref) => {
+                          if (ref && v.stream && ref.srcObject !== v.stream) {
+                            ref.srcObject = v.stream;
+                          }
+                        }}
+                        autoPlay
+                      ></video>
+                      <div className={styles.tileNameLabel}>
+                        <span>
+                          {usernamesMap[v.socketId]
+                            ? usernamesMap[v.socketId]
+                            : `User-${String(v.socketId).slice(0, 5)}`} (Presenting)
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Sidebar Area */}
+              <div className={styles.presentationSidebar}>
+                {screenSharer !== 'local' && (
+                  <div className={`${styles.videoTile} ${styles.localTile}`}>
+                    {video ? (
+                      <video
+                        ref={(ref) => {
+                          localVideoref.current = ref;
+                          if (ref && window.localStream && ref.srcObject !== window.localStream) {
+                            ref.srcObject = window.localStream;
+                          }
+                        }}
+                        autoPlay
+                        muted
+                        className={styles.localVideo}
+                      ></video>
+                    ) : (
+                      <div className={styles.avatarFallback}>
+                        <div className={`${styles.avatarCircle} ${styles.avatarColor0}`}>
+                          {(username || "Y").charAt(0).toUpperCase()}
+                        </div>
+                      </div>
+                    )}
+                    <div className={styles.tileNameLabel}>
+                      <span>{username || "You"}</span>
+                      <span className={styles.micIndicator}>
+                        {audio ? <MicIcon style={{ fontSize: 14, color: '#e8eaed' }} /> : <MicOffIcon style={{ fontSize: 14, color: '#ea4335' }} />}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {videos.filter(v => v.socketId !== screenSharer).map((v, idx) => (
+                  <div key={v.socketId} className={styles.videoTile}>
+                    <video
+                      data-socket={v.socketId}
+                      ref={(ref) => {
+                        if (ref && v.stream && ref.srcObject !== v.stream) {
+                          ref.srcObject = v.stream;
+                        }
+                      }}
+                      autoPlay
+                    ></video>
+                    {leavingPeers[v.socketId] && (
+                      <div className={styles.leavingOverlay}></div>
+                    )}
+                    <div className={styles.tileNameLabel}>
+                      <span>
+                        {usernamesMap[v.socketId]
+                          ? usernamesMap[v.socketId]
+                          : `User-${String(v.socketId).slice(0, 5)}`}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className={`${styles.videoGridArea} ${(showChat || showParticipants) ? styles.withSidePanel : ''}`}>
+              <div className={`${styles.videoGrid} ${styles[getGridClass(videos.length + 1)]}`}>
+                
+                {/* Local User Tile */}
+                <div className={`${styles.videoTile} ${styles.localTile}`}>
+                  {video ? (
+                    <video
+                      ref={(ref) => {
+                        localVideoref.current = ref;
+                        if (ref && window.localStream && ref.srcObject !== window.localStream) {
+                          ref.srcObject = window.localStream;
+                        }
+                      }}
+                      autoPlay
+                      muted
+                      className={styles.localVideo}
+                    ></video>
+                  ) : (
+                    <div className={styles.avatarFallback}>
+                      <div className={`${styles.avatarCircle} ${styles.avatarColor0}`}>
+                        {(username || "Y").charAt(0).toUpperCase()}
+                      </div>
+                    </div>
+                  )}
+                  <div className={styles.tileNameLabel}>
+                    <span>{username || "You"} (You)</span>
+                    <span className={styles.micIndicator}>
+                      {audio ? <MicIcon style={{ fontSize: 14, color: '#e8eaed' }} /> : <MicOffIcon style={{ fontSize: 14, color: '#ea4335' }} />}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Remote Participant Tiles */}
+                {videos.map((v, idx) => (
+                  <div key={v.socketId} className={`${styles.videoTile}`}>
+                    <video
+                      data-socket={v.socketId}
+                      ref={(ref) => {
+                        if (ref && v.stream && ref.srcObject !== v.stream) {
+                          ref.srcObject = v.stream;
+                        }
+                      }}
+                      autoPlay
+                    ></video>
+                    {leavingPeers[v.socketId] && (
+                      <div className={styles.leavingOverlay}></div>
+                    )}
+                    <div className={styles.tileNameLabel}>
+                      <span>
+                        {usernamesMap[v.socketId]
+                          ? usernamesMap[v.socketId]
+                          : `User-${String(v.socketId).slice(0, 5)}`}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ---- Control Bar (original SyncUp glassmorphism style) ---- */}
           <div className={styles.buttonContainers}>
             <IconButton onClick={handleVideo} style={{ color: "white" }}>
               {video === true ? <VideocamIcon /> : <VideocamOffIcon />}
@@ -1201,47 +1441,12 @@ for (let id in connections) {
               <ChatIcon />
             </IconButton>
 
-            {/* Participants Toggle Button */}
             <IconButton onClick={() => setShowParticipants(!showParticipants)} style={{ color: "white" }}>
               <PeopleIcon />
             </IconButton>
-
           </div>
 
-          <div className={styles.localVideoWrapper}>
-            <video
-              ref={localVideoref}
-              autoPlay
-              muted
-            ></video>
-            <div className={styles.nameLabel}>{username || "You"}</div>
-          </div>
-
-          <div className={styles.conferenceView}>
-            {videos.map((video) => (
-              <div key={video.socketId}>
-                <video
-                  data-socket={video.socketId}
-                  ref={(ref) => {
-                    if (ref && video.stream && ref.srcObject !== video.stream) {
-                      ref.srcObject = video.stream;
-                    }
-                  }}
-                  autoPlay
-                ></video>
-                {leavingPeers[video.socketId] && (
-                  <div className={styles.leavingOverlay}></div>
-                )}
-                <div className={styles.nameLabel}>
-                  {usernamesMap[video.socketId]
-                    ? usernamesMap[video.socketId]
-                    : `User-${String(video.socketId).slice(0, 5)}`}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Chat Modal */}
+          {/* ---- Chat Side Panel ---- */}
           {showChat && (
             <ChatModal
               messages={messages}
@@ -1255,70 +1460,76 @@ for (let id in connections) {
             />
           )}
 
-          {/* Participants Sidebar */}
+          {/* ---- Participants Side Panel ---- */}
           {showParticipants && (
-            <div className="absolute top-0 right-0 h-full w-80 bg-[#1a1b2f] border-l border-[#22c55e30] flex flex-col z-40 animate-fade-in shadow-2xl">
-              <div className="flex items-center justify-between p-4 border-b border-[#22c55e30]">
-                <h3 className="text-white font-semibold text-lg flex items-center gap-2">
-                  <PeopleIcon sx={{ color: "#22c55e" }} />
-                  Participants ({participants.length})
-                </h3>
-                <button
-                  onClick={() => setShowParticipants(false)}
-                  className="text-gray-400 hover:text-white transition"
-                >
+            <div className={styles.sidePanel}>
+              <div className={styles.sidePanelHeader}>
+                <span className={styles.sidePanelTitle}>People ({participants.length || videos.length + 1})</span>
+                <button className={styles.sidePanelClose} onClick={() => setShowParticipants(false)}>
                   ✕
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-                {participants.map((p) => (
-                  <div key={p.socketId} className="flex items-center justify-between bg-[#24263a] p-3 rounded-lg border border-[#22c55e15]">
-                    <div className="flex items-center gap-3 w-full">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#22c55e] to-[#15803d] flex items-center justify-center text-white font-bold text-sm">
-                        {p.username.charAt(0).toUpperCase()}
+              <div className={styles.sidePanelBody}>
+                {/* Current user always shown first */}
+                <div className={styles.participantItem}>
+                  <div className={`${styles.participantAvatar} ${styles.avatarColor0}`}>
+                    {(username || "Y").charAt(0).toUpperCase()}
+                  </div>
+                  <div className={styles.participantInfo}>
+                    <div className={styles.participantName}>
+                      {username || "You"}
+                      <span className={styles.participantYouTag}>(You)</span>
+                    </div>
+                    <div className={styles.participantRole}>{role || "Participant"}</div>
+                  </div>
+                </div>
+
+                {participants.length > 0 ? (
+                  participants
+                    .filter(p => p.socketId !== socketIdRef.current)
+                    .map((p, idx) => (
+                      <div key={p.socketId} className={styles.participantItem}>
+                        <div className={`${styles.participantAvatar} ${styles[`avatarColor${(idx + 1) % 8}`]}`}>
+                          {p.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div className={styles.participantInfo}>
+                          <div className={styles.participantName}>{p.username}</div>
+                          <div className={styles.participantRole}>{p.role}</div>
+                        </div>
                       </div>
-                      <div className="flex flex-col flex-1 truncate">
-                        <span className="text-white text-sm font-medium truncate">
-                          {p.username} {p.socketId === socketIdRef.current ? "(You)" : ""}
-                        </span>
-                        <span className={`text-xs font-semibold ${p.role === "Host" ? "text-[#22c55e]" : "text-gray-400"}`}>
-                          {p.role}
-                        </span>
+                    ))
+                ) : (
+                  videos.map((v, idx) => (
+                    <div key={v.socketId} className={styles.participantItem}>
+                      <div className={`${styles.participantAvatar} ${styles[`avatarColor${(idx + 1) % 8}`]}`}>
+                        {(usernamesMap[v.socketId] || "U").charAt(0).toUpperCase()}
+                      </div>
+                      <div className={styles.participantInfo}>
+                        <div className={styles.participantName}>
+                          {usernamesMap[v.socketId] || `User-${String(v.socketId).slice(0, 5)}`}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-                {participants.length === 0 && (
-                  <div className="text-center text-gray-500 mt-4 text-sm">
-                    No participants found.
-                  </div>
+                  ))
                 )}
               </div>
             </div>
           )}
 
-          {/* Host Admission UI */}
+          {/* ---- Host Admission Toasts ---- */}
           {role === "Host" && waitingGuests.length > 0 && (
-            <div className="absolute top-4 right-4 z-50 flex flex-col gap-2">
+            <div style={{ position: 'absolute', bottom: 100, left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', gap: 8, zIndex: 30 }}>
               {waitingGuests.map((guest) => (
-                <div key={guest.socketId} className="bg-[#1a1b2f] border border-[#22c55e40] p-4 rounded-xl shadow-2xl flex flex-col gap-3 min-w-[250px]">
-                  <p className="text-white text-sm font-medium">
-                    <span className="text-green-400 font-bold">{guest.username}</span> wants to join
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleAdmitGuest(guest.socketId, true)}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded-lg font-semibold transition"
-                    >
-                      Admit
-                    </button>
-                    <button
-                      onClick={() => handleAdmitGuest(guest.socketId, false)}
-                      className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs py-2 rounded-lg font-semibold transition"
-                    >
-                      Deny
-                    </button>
-                  </div>
+                <div key={guest.socketId} className={styles.admissionToast} style={{ position: 'relative', transform: 'none', left: 'auto', bottom: 'auto' }}>
+                  <span className={styles.admissionToastText}>
+                    <strong>{guest.username}</strong> wants to join
+                  </span>
+                  <button className={`${styles.admissionBtn} ${styles.admitBtn}`} onClick={() => handleAdmitGuest(guest.socketId, true)}>
+                    Admit
+                  </button>
+                  <button className={`${styles.admissionBtn} ${styles.denyBtn}`} onClick={() => handleAdmitGuest(guest.socketId, false)}>
+                    Deny
+                  </button>
                 </div>
               ))}
             </div>
