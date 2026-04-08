@@ -251,50 +251,34 @@ for (let id in connections) {
     for (let id in connections) {
       if (id === socketIdRef.current) continue;
       const pc = connections[id];
-      try {
-        const senders = pc.getSenders ? pc.getSenders() : [];
-        const hasVideo = senders.some((s) => s.track && s.track.kind === "video");
-        const hasAudio = senders.some((s) => s.track && s.track.kind === "audio");
-        const vt = window.localStream.getVideoTracks()[0];
-        const at = window.localStream.getAudioTracks()[0];
-        if (!hasVideo && vt) pc.addTrack(vt, window.localStream);
-        if (!hasAudio && at) pc.addTrack(at, window.localStream);
-      } catch (e) {}
+      if (!pc) continue;
 
-      pc.createOffer().then((description) => {
-        pc
-          .setLocalDescription(description)
-          .then(() => {
-            socketRef.current.emit(
-              "signal",
-              id,
-              JSON.stringify({ sdp: pc.localDescription })
-            );
-          })
-          .catch((e) => console.log(e));
-      });
+      try {
+        const senders = pc.getSenders();
+        const videoSender = senders.find(s => s.track && s.track.kind === "video");
+        const videoTrack = window.localStream.getVideoTracks()[0];
+
+        if (videoSender && videoTrack) {
+          videoSender.replaceTrack(videoTrack).catch(e => console.log("Error replacing screen track:", e));
+        }
+      } catch (e) {
+        console.log("Error updating screen track for connection:", id, e);
+      }
     }
 
-    stream.getTracks().forEach(
-      (track) =>
-        (track.onended = () => {
-          setScreen(false);
+    stream.getVideoTracks()[0].onended = () => {
+      setScreen(false);
 
-          try {
-            let tracks = localVideoref.current.srcObject.getTracks();
-            tracks.forEach((track) => track.stop());
-          } catch (e) {
-            console.log(e);
-          }
+      try {
+        let tracks = localVideoref.current.srcObject.getTracks();
+        tracks.forEach((track) => track.stop());
+      } catch (e) {
+        console.log(e);
+      }
 
-          let blackSilence = (...args) =>
-            new MediaStream([black(...args), silence()]);
-          window.localStream = blackSilence();
-          localVideoref.current.srcObject = window.localStream;
-
-          getUserMedia();
-        })
-    );
+      // Revert back to the user's camera
+      getUserMedia();
+    };
   };
 
   let gotMessageFromServer = (fromId, message) => {
